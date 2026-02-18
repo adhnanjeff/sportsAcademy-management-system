@@ -31,6 +31,14 @@ public class AuthController {
     private final AuthService authService;
     private final OtpService otpService;
 
+    /**
+     * Health check endpoint for backend warm-up
+     */
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("OK");
+    }
+
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
