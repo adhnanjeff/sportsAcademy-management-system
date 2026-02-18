@@ -31,5 +31,4 @@ logging:
 app:
   seed-data: false
   cors:
-    allowed-origins:
-      - https://sports-academy-management-system-ui-wine.vercel.app
+    allowed-origins: https://sports-academy-management-system-ui-wine.vercel.app
