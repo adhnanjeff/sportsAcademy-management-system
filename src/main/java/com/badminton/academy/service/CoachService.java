@@ -8,6 +8,9 @@ import com.badminton.academy.model.Coach;
 import com.badminton.academy.repository.CoachRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,49 +27,72 @@ public class CoachService {
 
     private final CoachRepository coachRepository;
 
+    @Cacheable(value = "coaches:all")
     public List<CoachResponse> getAllCoaches() {
+        log.debug("Cache miss: fetching all coaches from database");
         return coachRepository.findAll().stream()
                 .map(this::mapToCoachResponse)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "coaches:active")
     public List<CoachResponse> getActiveCoaches() {
+        log.debug("Cache miss: fetching active coaches from database");
         return coachRepository.findAllActiveCoaches().stream()
                 .map(this::mapToCoachResponse)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "coaches:byId", key = "#id")
     public CoachResponse getCoachById(Long id) {
+        log.debug("Cache miss: fetching coach {} from database", id);
         Coach coach = coachRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + id));
         return mapToCoachResponse(coach);
     }
 
+    @Cacheable(value = "coaches:byEmail", key = "#email")
     public CoachResponse getCoachByEmail(String email) {
+        log.debug("Cache miss: fetching coach by email {} from database", email);
         Coach coach = coachRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with email: " + email));
         return mapToCoachResponse(coach);
     }
 
+    @Cacheable(value = "coaches:bySpecialization", key = "#specialization")
     public List<CoachResponse> getCoachesBySpecialization(String specialization) {
+        log.debug("Cache miss: fetching coaches by specialization {} from database", specialization);
         return coachRepository.findBySpecialization(specialization).stream()
                 .map(this::mapToCoachResponse)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "coaches:byExperience", key = "#years")
     public List<CoachResponse> getCoachesByMinimumExperience(Integer years) {
+        log.debug("Cache miss: fetching coaches by min experience {} from database", years);
         return coachRepository.findByMinimumExperience(years).stream()
                 .map(this::mapToCoachResponse)
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "coaches:byBatch", key = "#batchId")
     public CoachResponse getCoachByBatch(Long batchId) {
+        log.debug("Cache miss: fetching coach by batch {} from database", batchId);
         Coach coach = coachRepository.findByBatchId(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found for batch id: " + batchId));
         return mapToCoachResponse(coach);
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "coaches:all", allEntries = true),
+        @CacheEvict(value = "coaches:active", allEntries = true),
+        @CacheEvict(value = "coaches:byId", key = "#id"),
+        @CacheEvict(value = "coaches:byEmail", allEntries = true),
+        @CacheEvict(value = "coaches:bySpecialization", allEntries = true),
+        @CacheEvict(value = "coaches:byExperience", allEntries = true),
+        @CacheEvict(value = "coaches:byBatch", allEntries = true)
+    })
     public CoachResponse updateCoach(Long id, UpdateCoachRequest request) {
         Coach coach = coachRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + id));
@@ -98,6 +124,12 @@ public class CoachService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "coaches:all", allEntries = true),
+        @CacheEvict(value = "coaches:active", allEntries = true),
+        @CacheEvict(value = "coaches:byId", key = "#id"),
+        @CacheEvict(value = "coaches:count", allEntries = true)
+    })
     public void deactivateCoach(Long id) {
         Coach coach = coachRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + id));
@@ -107,6 +139,12 @@ public class CoachService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "coaches:all", allEntries = true),
+        @CacheEvict(value = "coaches:active", allEntries = true),
+        @CacheEvict(value = "coaches:byId", key = "#id"),
+        @CacheEvict(value = "coaches:count", allEntries = true)
+    })
     public void activateCoach(Long id) {
         Coach coach = coachRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + id));
@@ -116,6 +154,16 @@ public class CoachService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "coaches:all", allEntries = true),
+        @CacheEvict(value = "coaches:active", allEntries = true),
+        @CacheEvict(value = "coaches:byId", key = "#id"),
+        @CacheEvict(value = "coaches:byEmail", allEntries = true),
+        @CacheEvict(value = "coaches:bySpecialization", allEntries = true),
+        @CacheEvict(value = "coaches:byExperience", allEntries = true),
+        @CacheEvict(value = "coaches:byBatch", allEntries = true),
+        @CacheEvict(value = "coaches:count", allEntries = true)
+    })
     public void deleteCoach(Long id) {
         Coach coach = coachRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + id));
@@ -128,7 +176,9 @@ public class CoachService {
         log.info("Coach deleted: {}", coach.getEmail());
     }
 
+    @Cacheable(value = "coaches:count")
     public Long countActiveCoaches() {
+        log.debug("Cache miss: counting active coaches from database");
         return coachRepository.countActiveCoaches();
     }
 

@@ -13,6 +13,9 @@ import com.badminton.academy.repository.CoachRepository;
 import com.badminton.academy.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,62 +33,85 @@ public class BatchService {
     private final StudentRepository studentRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:all")
     public List<BatchResponse> getAllBatches() {
+        log.debug("Cache miss: fetching all batches from database");
         return batchRepository.findAll().stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:active")
     public List<BatchResponse> getActiveBatches() {
+        log.debug("Cache miss: fetching active batches from database");
         return batchRepository.findByIsActiveTrue().stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:byId", key = "#id")
     public BatchResponse getBatchById(Long id) {
+        log.debug("Cache miss: fetching batch {} from database", id);
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
         return mapToBatchResponse(batch);
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:byCoach", key = "#coachId")
     public List<BatchResponse> getBatchesByCoach(Long coachId) {
+        log.debug("Cache miss: fetching batches by coach {} from database", coachId);
         return batchRepository.findByCoachId(coachId).stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:byCoach", key = "'active:' + #coachId")
     public List<BatchResponse> getActiveBatchesByCoach(Long coachId) {
+        log.debug("Cache miss: fetching active batches by coach {} from database", coachId);
         return batchRepository.findActiveByCoachId(coachId).stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:bySkillLevel", key = "#skillLevel")
     public List<BatchResponse> getBatchesBySkillLevel(SkillLevel skillLevel) {
+        log.debug("Cache miss: fetching batches by skill level {} from database", skillLevel);
         return batchRepository.findBySkillLevel(skillLevel).stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:byStudent", key = "#studentId")
     public List<BatchResponse> getBatchesByStudent(Long studentId) {
+        log.debug("Cache miss: fetching batches by student {} from database", studentId);
         return batchRepository.findByStudentId(studentId).stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "batches:withSlots")
     public List<BatchResponse> getBatchesWithAvailableSlots() {
+        log.debug("Cache miss: fetching batches with available slots from database");
         return batchRepository.findBatchesWithAvailableSlots().stream()
                 .map(this::mapToBatchResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:active", allEntries = true),
+        @CacheEvict(value = "batches:byCoach", allEntries = true),
+        @CacheEvict(value = "batches:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "batches:withSlots", allEntries = true)
+    })
     public BatchResponse createBatch(CreateBatchRequest request) {
         Coach coach = coachRepository.findById(request.getCoachId())
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + request.getCoachId()));
@@ -106,6 +132,14 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:active", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#id"),
+        @CacheEvict(value = "batches:byCoach", allEntries = true),
+        @CacheEvict(value = "batches:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "batches:withSlots", allEntries = true)
+    })
     public BatchResponse updateBatch(Long id, UpdateBatchRequest request) {
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
@@ -128,6 +162,15 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#batchId"),
+        @CacheEvict(value = "batches:byStudent", allEntries = true),
+        @CacheEvict(value = "batches:withSlots", allEntries = true),
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:byBatch", allEntries = true)
+    })
     public BatchResponse addStudentToBatch(Long batchId, Long studentId) {
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
@@ -144,6 +187,15 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#batchId"),
+        @CacheEvict(value = "batches:byStudent", allEntries = true),
+        @CacheEvict(value = "batches:withSlots", allEntries = true),
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:byBatch", allEntries = true)
+    })
     public BatchResponse removeStudentFromBatch(Long batchId, Long studentId) {
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
@@ -160,6 +212,12 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:active", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#id"),
+        @CacheEvict(value = "batches:withSlots", allEntries = true)
+    })
     public void deactivateBatch(Long id) {
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
@@ -169,6 +227,12 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:active", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#id"),
+        @CacheEvict(value = "batches:withSlots", allEntries = true)
+    })
     public void activateBatch(Long id) {
         Batch batch = batchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + id));
@@ -178,6 +242,15 @@ public class BatchService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:active", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#id"),
+        @CacheEvict(value = "batches:byCoach", allEntries = true),
+        @CacheEvict(value = "batches:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "batches:byStudent", allEntries = true),
+        @CacheEvict(value = "batches:withSlots", allEntries = true)
+    })
     public void deleteBatch(Long id) {
         if (!batchRepository.existsById(id)) {
             throw new ResourceNotFoundException("Batch not found with id: " + id);

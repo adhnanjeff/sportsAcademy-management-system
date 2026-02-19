@@ -16,6 +16,9 @@ import com.badminton.academy.model.enums.SkillLevel;
 import com.badminton.academy.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +45,9 @@ public class StudentService {
     private final FeePaymentHistoryRepository feePaymentHistoryRepository;
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:all")
     public List<StudentResponse> getAllStudents() {
+        log.debug("Cache miss: fetching all students from database");
         return studentRepository.findAll().stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -50,7 +55,9 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:active")
     public List<StudentResponse> getActiveStudents() {
+        log.debug("Cache miss: fetching active students from database");
         return studentRepository.findAllActiveStudents().stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -58,14 +65,18 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:byId", key = "#id")
     public StudentResponse getStudentById(Long id) {
+        log.debug("Cache miss: fetching student {} from database", id);
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
         return mapToStudentResponse(student);
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:bySkillLevel", key = "#skillLevel")
     public List<StudentResponse> getStudentsBySkillLevel(SkillLevel skillLevel) {
+        log.debug("Cache miss: fetching students by skill level {} from database", skillLevel);
         return studentRepository.findBySkillLevel(skillLevel).stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -73,7 +84,9 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:byParent", key = "#parentId")
     public List<StudentResponse> getStudentsByParent(Long parentId) {
+        log.debug("Cache miss: fetching students by parent {} from database", parentId);
         return studentRepository.findByParentId(parentId).stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -81,7 +94,9 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:byBatch", key = "#batchId")
     public List<StudentResponse> getStudentsByBatch(Long batchId) {
+        log.debug("Cache miss: fetching students by batch {} from database", batchId);
         return studentRepository.findByBatchId(batchId).stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -89,7 +104,9 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:byCoach", key = "#coachId")
     public List<StudentResponse> getStudentsByCoach(Long coachId) {
+        log.debug("Cache miss: fetching students by coach {} from database", coachId);
         return studentRepository.findByCoachId(coachId).stream()
                 .map(this::safeMapToStudentResponse)
                 .filter(Objects::nonNull)
@@ -97,6 +114,15 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:byParent", allEntries = true),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:byCoach", allEntries = true),
+        @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
+    })
     public StudentResponse createStudent(CreateStudentRequest request) {
         // Check for duplicate national ID if provided
         if (request.getNationalIdNumber() != null && !request.getNationalIdNumber().isBlank()) {
@@ -148,6 +174,16 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#id"),
+        @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:byParent", allEntries = true),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:byCoach", allEntries = true),
+        @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
+    })
     public StudentResponse updateStudent(Long id, UpdateStudentRequest request) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
@@ -193,6 +229,14 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#batchId")
+    })
     public StudentResponse assignToBatch(Long studentId, Long batchId) {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
@@ -211,6 +255,14 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "batches:all", allEntries = true),
+        @CacheEvict(value = "batches:byId", key = "#batchId")
+    })
     public StudentResponse removeFromBatch(Long studentId, Long batchId) {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
@@ -229,6 +281,13 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#id"),
+        @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
+    })
     public void deactivateStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
@@ -238,6 +297,18 @@ public class StudentService {
     }
 
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#id"),
+        @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:byParent", allEntries = true),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:byCoach", allEntries = true),
+        @CacheEvict(value = "students:countBySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:feeHistory", key = "#id"),
+        @CacheEvict(value = "batches:all", allEntries = true)
+    })
     public void deleteStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
@@ -261,7 +332,9 @@ public class StudentService {
         log.info("Student deleted: {} {}", student.getFirstName(), student.getLastName());
     }
 
+    @Cacheable(value = "students:countBySkillLevel", key = "#skillLevel")
     public Long countBySkillLevel(SkillLevel skillLevel) {
+        log.debug("Cache miss: counting students by skill level {} from database", skillLevel);
         return studentRepository.countBySkillLevel(skillLevel);
     }
 
@@ -355,7 +428,9 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:feeHistory", key = "#studentId")
     public List<FeePaymentHistoryResponse> getFeePaymentHistory(Long studentId) {
+        log.debug("Cache miss: fetching fee payment history for student {} from database", studentId);
         studentRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
 

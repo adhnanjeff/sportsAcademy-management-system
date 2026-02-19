@@ -12,24 +12,27 @@ import java.util.List;
 @Repository
 public interface BatchRepository extends JpaRepository<Batch, Long> {
     
-    List<Batch> findByCoachId(Long coachId);
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students WHERE b.coach.id = :coachId")
+    List<Batch> findByCoachId(@Param("coachId") Long coachId);
     
-    List<Batch> findBySkillLevel(SkillLevel skillLevel);
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students WHERE b.skillLevel = :skillLevel")
+    List<Batch> findBySkillLevel(@Param("skillLevel") SkillLevel skillLevel);
     
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students WHERE b.isActive = true")
     List<Batch> findByIsActiveTrue();
     
     List<Batch> findByIsActiveFalse();
     
-    @Query("SELECT b FROM Batch b WHERE b.coach.id = :coachId AND b.isActive = true")
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students WHERE b.coach.id = :coachId AND b.isActive = true")
     List<Batch> findActiveByCoachId(@Param("coachId") Long coachId);
     
-    @Query("SELECT b FROM Batch b JOIN b.students s WHERE s.id = :studentId")
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students s WHERE s.id = :studentId")
     List<Batch> findByStudentId(@Param("studentId") Long studentId);
     
-    @Query("SELECT COUNT(b.students) FROM Batch b WHERE b.id = :batchId")
+    @Query("SELECT COUNT(s) FROM Batch b JOIN b.students s WHERE b.id = :batchId")
     Long countStudentsByBatchId(@Param("batchId") Long batchId);
     
-    @Query("SELECT b FROM Batch b WHERE b.isActive = true")
+    @Query("SELECT DISTINCT b FROM Batch b LEFT JOIN FETCH b.coach LEFT JOIN FETCH b.students WHERE b.isActive = true")
     List<Batch> findBatchesWithAvailableSlots();
     
     @Query("SELECT b FROM Batch b WHERE b.skillLevel = :skillLevel AND b.isActive = true")

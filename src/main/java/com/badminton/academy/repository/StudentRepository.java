@@ -19,19 +19,19 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     
     List<Student> findByParentId(Long parentId);
     
-    @Query("SELECT s FROM Student s WHERE s.isActive = true")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent WHERE s.isActive = true")
     List<Student> findAllActiveStudents();
     
-    @Query("SELECT s FROM Student s JOIN s.batches b WHERE b.id = :batchId")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent WHERE b.id = :batchId")
     List<Student> findByBatchId(@Param("batchId") Long batchId);
     
-    @Query("SELECT DISTINCT s FROM Student s JOIN s.batches b WHERE b.coach.id = :coachId")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent WHERE b.coach.id = :coachId")
     List<Student> findByCoachId(@Param("coachId") Long coachId);
     
     @Query("SELECT COUNT(s) FROM Student s WHERE s.skillLevel = :skillLevel AND s.isActive = true")
     Long countBySkillLevel(@Param("skillLevel") SkillLevel skillLevel);
     
-    @Query("SELECT s FROM Student s WHERE s.parent.id = :parentId AND s.isActive = true")
+    @Query("SELECT s FROM Student s LEFT JOIN FETCH s.batches WHERE s.parent.id = :parentId AND s.isActive = true")
     List<Student> findActiveStudentsByParentId(@Param("parentId") Long parentId);
 
     boolean existsByNationalIdNumber(String nationalIdNumber);

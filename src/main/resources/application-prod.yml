@@ -8,6 +8,8 @@ spring:
       maximum-pool-size: 5
       minimum-idle: 2
       connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
@@ -15,7 +17,13 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 25
+        order_inserts: true
+        order_updates: true
+        generate_statistics: false
     show-sql: false
+    open-in-view: false
 
   flyway:
     enabled: true
@@ -23,10 +31,43 @@ spring:
     locations: classpath:db/migration
     validate-on-migrate: true
 
+  # Production cache settings - aggressive caching for Render free tier
+  cache:
+    type: caffeine
+    cache-names:
+      - students:all
+      - students:active
+      - students:byId
+      - students:bySkillLevel
+      - students:byParent
+      - students:byBatch
+      - students:byCoach
+      - students:countBySkillLevel
+      - students:feeHistory
+      - batches:all
+      - batches:active
+      - batches:byId
+      - batches:byCoach
+      - batches:bySkillLevel
+      - batches:byStudent
+      - batches:withSlots
+      - coaches:all
+      - coaches:active
+      - coaches:byId
+      - coaches:byEmail
+      - coaches:bySpecialization
+      - coaches:byExperience
+      - coaches:byBatch
+      - coaches:count
+    caffeine:
+      spec: maximumSize=3000,expireAfterWrite=60m
+
 logging:
   level:
     com.badminton.academy: INFO
     org.flywaydb: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql: WARN
 
 app:
   seed-data: false

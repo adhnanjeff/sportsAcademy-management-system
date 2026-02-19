@@ -66,6 +66,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
                 
+                // Health check endpoints (for UptimeRobot/monitoring)
+                .requestMatchers("/api/health", "/api/ping").permitAll()
+                
                 // Swagger/OpenAPI endpoints
                 .requestMatchers(
                     "/v3/api-docs/**",
