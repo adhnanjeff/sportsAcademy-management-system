@@ -23,10 +23,6 @@ ADD COLUMN IF NOT EXISTS was_backdated BOOLEAN DEFAULT FALSE;
 ALTER TABLE attendance 
 ADD COLUMN IF NOT EXISTS backdate_reason VARCHAR(500);
 
--- Add constraint to ensure entry_type is valid
-ALTER TABLE attendance 
-ADD CONSTRAINT chk_entry_type CHECK (entry_type IN ('REGULAR', 'MAKEUP'));
-
 -- Add index for compensates_for_date lookups
 CREATE INDEX IF NOT EXISTS idx_attendance_compensates_for_date 
 ON attendance(compensates_for_date) WHERE compensates_for_date IS NOT NULL;
@@ -39,7 +35,7 @@ ON attendance(was_backdated) WHERE was_backdated = TRUE;
 
 CREATE TABLE IF NOT EXISTS attendance_audit_log (
     id BIGSERIAL PRIMARY KEY,
-    attendance_id BIGINT NOT NULL REFERENCES attendance(id) ON DELETE CASCADE,
+    attendance_id BIGINT NOT NULL,
     action VARCHAR(20) NOT NULL, -- CREATE, UPDATE, DELETE
     
     -- Previous values (NULL for CREATE)
@@ -52,8 +48,8 @@ CREATE TABLE IF NOT EXISTS attendance_audit_log (
     new_entry_type VARCHAR(20),
     new_notes VARCHAR(500),
     
-    -- Who made the change
-    changed_by_id BIGINT REFERENCES coaches(id),
+    -- Who made the change (references coaches.user_id)
+    changed_by_id BIGINT,
     changed_by_role VARCHAR(20) NOT NULL, -- COACH, ADMIN
     
     -- Additional audit info
@@ -61,9 +57,9 @@ CREATE TABLE IF NOT EXISTS attendance_audit_log (
     was_backdated BOOLEAN DEFAULT FALSE,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     
-    -- Constraints
-    CONSTRAINT chk_audit_action CHECK (action IN ('CREATE', 'UPDATE', 'DELETE')),
-    CONSTRAINT chk_audit_role CHECK (changed_by_role IN ('COACH', 'ADMIN'))
+    -- Foreign key constraints
+    CONSTRAINT fk_audit_attendance FOREIGN KEY (attendance_id) REFERENCES attendance(id) ON DELETE CASCADE,
+    CONSTRAINT fk_audit_changed_by FOREIGN KEY (changed_by_id) REFERENCES coaches(user_id)
 );
 
 -- Add indexes for common audit queries
