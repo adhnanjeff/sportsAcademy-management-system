@@ -26,4 +26,10 @@ public class BulkAttendanceRequest {
     @NotEmpty(message = "Student attendance list cannot be empty")
     @Valid
     private List<StudentAttendanceItem> studentAttendances;
+
+    /**
+     * Required reason when marking attendance for a past date.
+     * Mandatory for backdated entries for audit trail.
+     */
+    private String backdateReason;
 }

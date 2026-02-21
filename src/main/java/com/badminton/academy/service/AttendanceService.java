@@ -9,19 +9,24 @@ import com.badminton.academy.dto.response.BatchAttendanceMatrixResponse;
 import com.badminton.academy.dto.response.AttendanceResponse;
 import com.badminton.academy.dto.response.AttendanceSummaryResponse;
 import com.badminton.academy.dto.response.StudentAttendanceMatrixRowResponse;
+import com.badminton.academy.dto.response.AttendanceAuditLogResponse;
 import com.badminton.academy.exception.DuplicateResourceException;
 import com.badminton.academy.exception.ResourceNotFoundException;
 import com.badminton.academy.model.Attendance;
+import com.badminton.academy.model.AttendanceAuditLog;
 import com.badminton.academy.model.Batch;
 import com.badminton.academy.model.Coach;
 import com.badminton.academy.model.Student;
 import com.badminton.academy.model.enums.AttendanceStatus;
+import com.badminton.academy.model.enums.AttendanceEntryType;
 import com.badminton.academy.repository.AttendanceRepository;
+import com.badminton.academy.repository.AttendanceAuditLogRepository;
 import com.badminton.academy.repository.BatchRepository;
 import com.badminton.academy.repository.CoachRepository;
 import com.badminton.academy.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,9 +49,22 @@ import java.util.stream.Collectors;
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
+    private final AttendanceAuditLogRepository auditLogRepository;
     private final StudentRepository studentRepository;
     private final BatchRepository batchRepository;
     private final CoachRepository coachRepository;
+
+    /**
+     * Number of days coaches can backdate attendance (default: 7 days)
+     */
+    @Value("${attendance.backdate.coach-window-days:7}")
+    private int coachBackdateWindowDays;
+
+    /**
+     * Number of days admins can backdate attendance (default: 30 days)
+     */
+    @Value("${attendance.backdate.admin-window-days:30}")
+    private int adminBackdateWindowDays;
 
     public List<AttendanceResponse> getAllAttendances() {
         return attendanceRepository.findAll().stream()
@@ -97,8 +115,14 @@ public class AttendanceService {
     }
 
     @Transactional
-    public AttendanceResponse markAttendance(MarkAttendanceRequest request, Long coachId) {
-        validateAttendanceDateForModification(request.getDate());
+    public AttendanceResponse markAttendance(MarkAttendanceRequest request, Long coachId, boolean isAdmin) {
+        boolean isBackdated = isBackdatedDate(request.getDate());
+        
+        // Validate backdating permissions and reason
+        validateBackdatePermission(request.getDate(), isAdmin, request.getBackdateReason());
+        
+        // Validate makeup attendance
+        validateMakeupAttendance(request);
 
         // Check if attendance already exists for this student, batch, and date
         if (attendanceRepository.existsByStudentIdAndBatchIdAndDate(
@@ -115,24 +139,48 @@ public class AttendanceService {
         Coach coach = coachRepository.findById(coachId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + coachId));
 
+        AttendanceEntryType entryType = request.getEntryType() != null 
+                ? request.getEntryType() 
+                : AttendanceEntryType.REGULAR;
+
         Attendance attendance = Attendance.builder()
                 .student(student)
                 .batch(batch)
                 .date(request.getDate())
                 .status(request.getStatus())
+                .entryType(entryType)
+                .compensatesForDate(request.getCompensatesForDate())
                 .notes(request.getNotes())
                 .markedBy(coach)
+                .wasBackdated(isBackdated)
+                .backdateReason(isBackdated ? request.getBackdateReason() : null)
                 .build();
 
         Attendance savedAttendance = attendanceRepository.save(attendance);
-        log.info("Attendance marked for student {} in batch {} on {}", 
-                request.getStudentId(), request.getBatchId(), request.getDate());
+        
+        // Create audit log
+        createAuditLog(savedAttendance, "CREATE", null, null, null, 
+                coach, isAdmin ? "ADMIN" : "COACH", request.getBackdateReason(), isBackdated);
+
+        log.info("Attendance marked for student {} in batch {} on {} (type: {}, backdated: {})", 
+                request.getStudentId(), request.getBatchId(), request.getDate(), entryType, isBackdated);
         return mapToAttendanceResponse(savedAttendance);
     }
 
+    /**
+     * Legacy method for backward compatibility - defaults to non-admin
+     */
     @Transactional
-    public List<AttendanceResponse> markBulkAttendance(BulkAttendanceRequest request, Long coachId) {
-        validateAttendanceDateForModification(request.getDate());
+    public AttendanceResponse markAttendance(MarkAttendanceRequest request, Long coachId) {
+        return markAttendance(request, coachId, false);
+    }
+
+    @Transactional
+    public List<AttendanceResponse> markBulkAttendance(BulkAttendanceRequest request, Long coachId, boolean isAdmin) {
+        boolean isBackdated = isBackdatedDate(request.getDate());
+        
+        // Validate backdating permissions and reason
+        validateBackdatePermission(request.getDate(), isAdmin, request.getBackdateReason());
 
         Batch batch = batchRepository.findById(request.getBatchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + request.getBatchId()));
@@ -149,9 +197,18 @@ public class AttendanceService {
             Student student = studentRepository.findById(item.getStudentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + item.getStudentId()));
 
+            // Validate makeup if applicable
+            if (item.getEntryType() == AttendanceEntryType.MAKEUP) {
+                validateMakeupItem(item, student.getId(), batch.getId());
+            }
+
             Attendance attendance = attendanceRepository.findByStudentIdAndBatchIdAndDate(
                     item.getStudentId(), request.getBatchId(), request.getDate()
             ).orElse(null);
+
+            AttendanceEntryType entryType = item.getEntryType() != null 
+                    ? item.getEntryType() 
+                    : AttendanceEntryType.REGULAR;
 
             if (attendance == null) {
                 attendance = Attendance.builder()
@@ -159,44 +216,99 @@ public class AttendanceService {
                         .batch(batch)
                         .date(request.getDate())
                         .status(item.getStatus())
+                        .entryType(entryType)
+                        .compensatesForDate(item.getCompensatesForDate())
                         .notes(item.getNotes())
                         .markedBy(coach)
+                        .wasBackdated(isBackdated)
+                        .backdateReason(isBackdated ? request.getBackdateReason() : null)
                         .build();
+                
+                Attendance savedAttendance = attendanceRepository.save(attendance);
+                createAuditLog(savedAttendance, "CREATE", null, null, null,
+                        coach, isAdmin ? "ADMIN" : "COACH", request.getBackdateReason(), isBackdated);
                 created++;
+                responses.add(mapToAttendanceResponse(savedAttendance));
             } else {
+                // Store previous values for audit
+                AttendanceStatus prevStatus = attendance.getStatus();
+                AttendanceEntryType prevEntryType = attendance.getEntryType();
+                String prevNotes = attendance.getNotes();
+                
                 attendance.setStatus(item.getStatus());
+                attendance.setEntryType(entryType);
+                attendance.setCompensatesForDate(item.getCompensatesForDate());
                 attendance.setNotes(item.getNotes());
                 attendance.setMarkedBy(coach);
                 attendance.setMarkedAt(java.time.LocalDateTime.now());
-                updated++;
-            }
+                if (isBackdated) {
+                    attendance.setWasBackdated(true);
+                    attendance.setBackdateReason(request.getBackdateReason());
+                }
 
-            Attendance savedAttendance = attendanceRepository.save(attendance);
-            responses.add(mapToAttendanceResponse(savedAttendance));
+                Attendance savedAttendance = attendanceRepository.save(attendance);
+                createAuditLog(savedAttendance, "UPDATE", prevStatus, prevEntryType, prevNotes,
+                        coach, isAdmin ? "ADMIN" : "COACH", request.getBackdateReason(), isBackdated);
+                updated++;
+                responses.add(mapToAttendanceResponse(savedAttendance));
+            }
         }
 
-        log.info("Bulk attendance processed for batch {} on {} - {} created, {} updated",
-                request.getBatchId(), request.getDate(), created, updated);
+        log.info("Bulk attendance processed for batch {} on {} - {} created, {} updated (backdated: {})",
+                request.getBatchId(), request.getDate(), created, updated, isBackdated);
         return responses;
     }
 
+    /**
+     * Legacy method for backward compatibility - defaults to non-admin
+     */
     @Transactional
-    public AttendanceResponse updateAttendance(Long id, MarkAttendanceRequest request, Long coachId) {
+    public List<AttendanceResponse> markBulkAttendance(BulkAttendanceRequest request, Long coachId) {
+        return markBulkAttendance(request, coachId, false);
+    }
+
+    @Transactional
+    public AttendanceResponse updateAttendance(Long id, MarkAttendanceRequest request, Long coachId, boolean isAdmin) {
         Attendance attendance = attendanceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Attendance not found with id: " + id));
 
-        validateAttendanceDateForModification(attendance.getDate());
+        boolean isBackdated = isBackdatedDate(attendance.getDate());
+        validateBackdatePermission(attendance.getDate(), isAdmin, request.getBackdateReason());
 
         Coach coach = coachRepository.findById(coachId)
                 .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + coachId));
 
+        // Store previous values for audit
+        AttendanceStatus prevStatus = attendance.getStatus();
+        AttendanceEntryType prevEntryType = attendance.getEntryType();
+        String prevNotes = attendance.getNotes();
+
         if (request.getStatus() != null) attendance.setStatus(request.getStatus());
+        if (request.getEntryType() != null) attendance.setEntryType(request.getEntryType());
+        if (request.getCompensatesForDate() != null) attendance.setCompensatesForDate(request.getCompensatesForDate());
         if (request.getNotes() != null) attendance.setNotes(request.getNotes());
         attendance.setMarkedBy(coach);
+        attendance.setMarkedAt(java.time.LocalDateTime.now());
+        
+        if (isBackdated) {
+            attendance.setWasBackdated(true);
+            attendance.setBackdateReason(request.getBackdateReason());
+        }
 
         Attendance updatedAttendance = attendanceRepository.save(attendance);
-        log.info("Attendance updated for id: {}", id);
+        createAuditLog(updatedAttendance, "UPDATE", prevStatus, prevEntryType, prevNotes,
+                coach, isAdmin ? "ADMIN" : "COACH", request.getBackdateReason(), isBackdated);
+        
+        log.info("Attendance updated for id: {} (backdated: {})", id, isBackdated);
         return mapToAttendanceResponse(updatedAttendance);
+    }
+
+    /**
+     * Legacy method for backward compatibility - defaults to non-admin
+     */
+    @Transactional
+    public AttendanceResponse updateAttendance(Long id, MarkAttendanceRequest request, Long coachId) {
+        return updateAttendance(id, request, coachId, false);
     }
 
     @Transactional
@@ -334,6 +446,8 @@ public class AttendanceService {
             cells.add(AttendanceCellResponse.builder()
                     .date(date)
                     .status(attendance != null ? attendance.getStatus() : null)
+                    .entryType(attendance != null ? attendance.getEntryType() : null)
+                    .compensatesForDate(attendance != null ? attendance.getCompensatesForDate() : null)
                     .notes(attendance != null ? attendance.getNotes() : null)
                     .marked(attendance != null)
                     .futureDate(futureDate)
@@ -352,14 +466,209 @@ public class AttendanceService {
         return referenceDate;
     }
 
-    private void validateAttendanceDateForModification(LocalDate date) {
+    // ==================== AUDIT LOG METHODS ====================
+
+    public List<AttendanceAuditLogResponse> getAuditLogByAttendanceId(Long attendanceId) {
+        return auditLogRepository.findByAttendanceIdOrderByChangedAtDesc(attendanceId).stream()
+                .map(this::mapToAuditLogResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceAuditLogResponse> getAuditLogByStudentId(Long studentId) {
+        return auditLogRepository.findByStudentIdOrderByChangedAtDesc(studentId).stream()
+                .map(this::mapToAuditLogResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceAuditLogResponse> getAuditLogByBatchId(Long batchId) {
+        return auditLogRepository.findByBatchIdOrderByChangedAtDesc(batchId).stream()
+                .map(this::mapToAuditLogResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<AttendanceAuditLogResponse> getAllBackdatedChanges() {
+        return auditLogRepository.findAllBackdatedChanges().stream()
+                .map(this::mapToAuditLogResponse)
+                .collect(Collectors.toList());
+    }
+
+    // ==================== MAKEUP ATTENDANCE METHODS ====================
+
+    /**
+     * Get eligible absences that can be compensated with a makeup session.
+     * Returns absences within the allowed window that haven't been compensated yet.
+     */
+    public List<AttendanceResponse> getEligibleAbsencesForMakeup(Long studentId, Long batchId) {
+        LocalDate today = LocalDate.now();
+        LocalDate windowStart = today.minusDays(adminBackdateWindowDays); // Use admin window as max
+        
+        // Find absences in the window
+        List<Attendance> absences = attendanceRepository.findByStudentAndDateRange(studentId, windowStart, today)
+                .stream()
+                .filter(a -> a.getBatch().getId().equals(batchId))
+                .filter(a -> a.getStatus() == AttendanceStatus.ABSENT)
+                .collect(Collectors.toList());
+        
+        // Filter out already compensated absences
+        List<LocalDate> compensatedDates = attendanceRepository.findByStudentId(studentId).stream()
+                .filter(a -> a.getEntryType() == AttendanceEntryType.MAKEUP)
+                .filter(a -> a.getCompensatesForDate() != null)
+                .map(Attendance::getCompensatesForDate)
+                .collect(Collectors.toList());
+        
+        return absences.stream()
+                .filter(a -> !compensatedDates.contains(a.getDate()))
+                .map(this::mapToAttendanceResponse)
+                .collect(Collectors.toList());
+    }
+
+    // ==================== VALIDATION METHODS ====================
+
+    /**
+     * Check if a date is in the past (backdated)
+     */
+    private boolean isBackdatedDate(LocalDate date) {
+        return date != null && date.isBefore(LocalDate.now());
+    }
+
+    /**
+     * Validate backdating permissions based on role and window.
+     * Coaches: can backdate within coachBackdateWindowDays
+     * Admins: can backdate within adminBackdateWindowDays
+     */
+    private void validateBackdatePermission(LocalDate date, boolean isAdmin, String reason) {
         if (date == null) {
             throw new IllegalArgumentException("Attendance date is required");
         }
-        if (date.isBefore(LocalDate.now())) {
-            throw new IllegalArgumentException("Attendance for past dates is locked and cannot be modified");
+
+        LocalDate today = LocalDate.now();
+        
+        // Future dates not allowed
+        if (date.isAfter(today)) {
+            throw new IllegalArgumentException("Cannot mark attendance for future dates");
+        }
+
+        // If it's today, no special validation needed
+        if (date.equals(today)) {
+            return;
+        }
+
+        // Calculate days in the past
+        long daysAgo = java.time.temporal.ChronoUnit.DAYS.between(date, today);
+        
+        int allowedWindow = isAdmin ? adminBackdateWindowDays : coachBackdateWindowDays;
+        
+        if (daysAgo > allowedWindow) {
+            String role = isAdmin ? "Admin" : "Coach";
+            throw new IllegalArgumentException(
+                    String.format("%s can only modify attendance within the last %d days. " +
+                            "This date is %d days ago.", role, allowedWindow, daysAgo)
+            );
+        }
+
+        // Require reason for backdated entries
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "A reason is required when marking or editing attendance for past dates"
+            );
         }
     }
+
+    /**
+     * Validate makeup attendance constraints
+     */
+    private void validateMakeupAttendance(MarkAttendanceRequest request) {
+        if (request.getEntryType() == AttendanceEntryType.MAKEUP) {
+            if (request.getCompensatesForDate() == null) {
+                throw new IllegalArgumentException(
+                        "compensatesForDate is required for MAKEUP attendance entries"
+                );
+            }
+            
+            // Cannot compensate for future dates
+            if (request.getCompensatesForDate().isAfter(LocalDate.now())) {
+                throw new IllegalArgumentException(
+                        "Cannot compensate for a future date"
+                );
+            }
+
+            // Cannot compensate for the same day
+            if (request.getCompensatesForDate().equals(request.getDate())) {
+                throw new IllegalArgumentException(
+                        "Makeup date cannot be the same as the compensated date"
+                );
+            }
+
+            // Check if the compensated date already has a makeup
+            boolean alreadyCompensated = attendanceRepository
+                    .findByStudentIdAndCompensatesForDate(request.getStudentId(), request.getCompensatesForDate())
+                    .isPresent();
+            
+            if (alreadyCompensated) {
+                throw new DuplicateResourceException(
+                        "This absence has already been compensated with a makeup session"
+                );
+            }
+        }
+    }
+
+    private void validateMakeupItem(StudentAttendanceItem item, Long studentId, Long batchId) {
+        if (item.getCompensatesForDate() == null) {
+            throw new IllegalArgumentException(
+                    "compensatesForDate is required for MAKEUP attendance entries (student: " + studentId + ")"
+            );
+        }
+        
+        if (item.getCompensatesForDate().isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException(
+                    "Cannot compensate for a future date (student: " + studentId + ")"
+            );
+        }
+
+        // Check if already compensated
+        boolean alreadyCompensated = attendanceRepository
+                .findByStudentIdAndCompensatesForDate(studentId, item.getCompensatesForDate())
+                .isPresent();
+        
+        if (alreadyCompensated) {
+            throw new DuplicateResourceException(
+                    "Absence on " + item.getCompensatesForDate() + " already compensated (student: " + studentId + ")"
+            );
+        }
+    }
+
+    // ==================== AUDIT LOG HELPER ====================
+
+    private void createAuditLog(
+            Attendance attendance,
+            String action,
+            AttendanceStatus prevStatus,
+            AttendanceEntryType prevEntryType,
+            String prevNotes,
+            Coach changedBy,
+            String changedByRole,
+            String reason,
+            boolean wasBackdated
+    ) {
+        AttendanceAuditLog auditLog = AttendanceAuditLog.builder()
+                .attendance(attendance)
+                .action(action)
+                .previousStatus(prevStatus)
+                .previousEntryType(prevEntryType)
+                .previousNotes(prevNotes)
+                .newStatus(attendance.getStatus())
+                .newEntryType(attendance.getEntryType())
+                .newNotes(attendance.getNotes())
+                .changedBy(changedBy)
+                .changedByRole(changedByRole)
+                .reason(reason)
+                .wasBackdated(wasBackdated)
+                .build();
+        
+        auditLogRepository.save(auditLog);
+    }
+
+    // ==================== MAPPING METHODS ====================
 
     private AttendanceResponse mapToAttendanceResponse(Attendance attendance) {
         return AttendanceResponse.builder()
@@ -370,10 +679,39 @@ public class AttendanceService {
                 .batchName(attendance.getBatch().getName())
                 .date(attendance.getDate())
                 .status(attendance.getStatus())
+                .entryType(attendance.getEntryType())
+                .compensatesForDate(attendance.getCompensatesForDate())
                 .notes(attendance.getNotes())
                 .markedById(attendance.getMarkedBy() != null ? attendance.getMarkedBy().getId() : null)
                 .markedByName(attendance.getMarkedBy() != null ? attendance.getMarkedBy().getFullName() : null)
                 .markedAt(attendance.getMarkedAt())
+                .wasBackdated(attendance.getWasBackdated())
+                .build();
+    }
+
+    private AttendanceAuditLogResponse mapToAuditLogResponse(AttendanceAuditLog log) {
+        Attendance attendance = log.getAttendance();
+        return AttendanceAuditLogResponse.builder()
+                .id(log.getId())
+                .attendanceId(attendance.getId())
+                .studentId(attendance.getStudent().getId())
+                .studentName(attendance.getStudent().getFullName())
+                .batchId(attendance.getBatch().getId())
+                .batchName(attendance.getBatch().getName())
+                .attendanceDate(attendance.getDate())
+                .action(log.getAction())
+                .previousStatus(log.getPreviousStatus())
+                .previousEntryType(log.getPreviousEntryType())
+                .previousNotes(log.getPreviousNotes())
+                .newStatus(log.getNewStatus())
+                .newEntryType(log.getNewEntryType())
+                .newNotes(log.getNewNotes())
+                .changedById(log.getChangedBy() != null ? log.getChangedBy().getId() : null)
+                .changedByName(log.getChangedBy() != null ? log.getChangedBy().getFullName() : null)
+                .changedByRole(log.getChangedByRole())
+                .reason(log.getReason())
+                .wasBackdated(log.getWasBackdated())
+                .changedAt(log.getChangedAt())
                 .build();
     }
 }

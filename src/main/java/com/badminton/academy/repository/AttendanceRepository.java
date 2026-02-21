@@ -88,4 +88,13 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     @Modifying
     @Query("DELETE FROM Attendance a WHERE a.student.id = :studentId")
     int deleteByStudentId(@Param("studentId") Long studentId);
+
+    /**
+     * Find attendance by student and compensatesForDate to check for existing makeup sessions
+     */
+    @Query("SELECT a FROM Attendance a WHERE a.student.id = :studentId AND a.compensatesForDate = :compensatesForDate")
+    Optional<Attendance> findByStudentIdAndCompensatesForDate(
+        @Param("studentId") Long studentId,
+        @Param("compensatesForDate") LocalDate compensatesForDate
+    );
 }

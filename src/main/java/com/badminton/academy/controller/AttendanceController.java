@@ -4,9 +4,11 @@ import com.badminton.academy.dto.request.BulkAttendanceRequest;
 import com.badminton.academy.dto.request.MarkAttendanceRequest;
 import com.badminton.academy.dto.response.AttendanceResponse;
 import com.badminton.academy.dto.response.AttendanceSummaryResponse;
+import com.badminton.academy.dto.response.AttendanceAuditLogResponse;
 import com.badminton.academy.dto.response.BatchAttendanceMatrixResponse;
 import com.badminton.academy.dto.response.MessageResponse;
 import com.badminton.academy.model.User;
+import com.badminton.academy.model.enums.Role;
 import com.badminton.academy.service.AttendanceService;
 import com.badminton.academy.service.AuthService;
 import jakarta.validation.Valid;
@@ -107,7 +109,8 @@ public class AttendanceController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<AttendanceResponse> markAttendance(@Valid @RequestBody MarkAttendanceRequest request) {
         User currentUser = authService.getCurrentUser();
-        AttendanceResponse response = attendanceService.markAttendance(request, currentUser.getId());
+        boolean isAdmin = currentUser.getRole() == Role.ADMIN;
+        AttendanceResponse response = attendanceService.markAttendance(request, currentUser.getId(), isAdmin);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -115,7 +118,8 @@ public class AttendanceController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<List<AttendanceResponse>> markBulkAttendance(@Valid @RequestBody BulkAttendanceRequest request) {
         User currentUser = authService.getCurrentUser();
-        List<AttendanceResponse> responses = attendanceService.markBulkAttendance(request, currentUser.getId());
+        boolean isAdmin = currentUser.getRole() == Role.ADMIN;
+        List<AttendanceResponse> responses = attendanceService.markBulkAttendance(request, currentUser.getId(), isAdmin);
         return ResponseEntity.status(HttpStatus.CREATED).body(responses);
     }
 
@@ -125,7 +129,8 @@ public class AttendanceController {
             @PathVariable Long id,
             @Valid @RequestBody MarkAttendanceRequest request) {
         User currentUser = authService.getCurrentUser();
-        return ResponseEntity.ok(attendanceService.updateAttendance(id, request, currentUser.getId()));
+        boolean isAdmin = currentUser.getRole() == Role.ADMIN;
+        return ResponseEntity.ok(attendanceService.updateAttendance(id, request, currentUser.getId(), isAdmin));
     }
 
     @DeleteMapping("/{id}")
@@ -147,5 +152,41 @@ public class AttendanceController {
             @PathVariable Long studentId,
             @PathVariable Long batchId) {
         return ResponseEntity.ok(attendanceService.calculateAttendancePercentage(studentId, batchId));
+    }
+
+    // ==================== AUDIT LOG ENDPOINTS ====================
+
+    @GetMapping("/{id}/audit-log")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<AttendanceAuditLogResponse>> getAttendanceAuditLog(@PathVariable Long id) {
+        return ResponseEntity.ok(attendanceService.getAuditLogByAttendanceId(id));
+    }
+
+    @GetMapping("/student/{studentId}/audit-log")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<AttendanceAuditLogResponse>> getStudentAuditLog(@PathVariable Long studentId) {
+        return ResponseEntity.ok(attendanceService.getAuditLogByStudentId(studentId));
+    }
+
+    @GetMapping("/batch/{batchId}/audit-log")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<AttendanceAuditLogResponse>> getBatchAuditLog(@PathVariable Long batchId) {
+        return ResponseEntity.ok(attendanceService.getAuditLogByBatchId(batchId));
+    }
+
+    @GetMapping("/audit-log/backdated")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<AttendanceAuditLogResponse>> getAllBackdatedChanges() {
+        return ResponseEntity.ok(attendanceService.getAllBackdatedChanges());
+    }
+
+    // ==================== MAKEUP ATTENDANCE ENDPOINTS ====================
+
+    @GetMapping("/student/{studentId}/batch/{batchId}/eligible-absences")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<AttendanceResponse>> getEligibleAbsencesForMakeup(
+            @PathVariable Long studentId,
+            @PathVariable Long batchId) {
+        return ResponseEntity.ok(attendanceService.getEligibleAbsencesForMakeup(studentId, batchId));
     }
 }

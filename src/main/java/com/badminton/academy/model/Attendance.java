@@ -1,6 +1,7 @@
 package com.badminton.academy.model;
 
 import com.badminton.academy.model.enums.AttendanceStatus;
+import com.badminton.academy.model.enums.AttendanceEntryType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -37,6 +38,22 @@ public class Attendance {
     @Column(nullable = false)
     private AttendanceStatus status;
 
+    /**
+     * Indicates if this is a regular scheduled attendance or a makeup session.
+     * REGULAR = Student was scheduled for this date
+     * MAKEUP = Student is compensating for a missed session
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private AttendanceEntryType entryType = AttendanceEntryType.REGULAR;
+
+    /**
+     * For MAKEUP entries: the original missed class date being compensated.
+     * Null for REGULAR entries.
+     */
+    private LocalDate compensatesForDate;
+
     private String notes;
 
     @ManyToOne
@@ -45,8 +62,25 @@ public class Attendance {
 
     private LocalDateTime markedAt;
 
+    /**
+     * Tracks if this record was created/modified for a past date.
+     * Used for audit and reporting purposes.
+     */
+    @Builder.Default
+    private Boolean wasBackdated = false;
+
+    /**
+     * Required reason when marking/editing backdated attendance.
+     * Provides auditability for past modifications.
+     */
+    @Column(length = 500)
+    private String backdateReason;
+
     @PrePersist
     protected void onCreate() {
         markedAt = LocalDateTime.now();
+        if (entryType == null) {
+            entryType = AttendanceEntryType.REGULAR;
+        }
     }
 }

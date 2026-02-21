@@ -77,3 +77,9 @@ app:
       - http://localhost:4200
       - http://127.0.0.1:4200
       - http://localhost:3000
+
+# Attendance Configuration
+attendance:
+  backdate:
+    coach-window-days: 7  # Coaches can backdate attendance up to 7 days
+    admin-window-days: 30 # Admins can backdate attendance up to 30 days
