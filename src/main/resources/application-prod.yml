@@ -1,17 +1,21 @@
 spring:
   datasource:
-    url: ${DATABASE_URL:${DB_URL}}
+    url: ${DATABASE_URL:${DB_URL}}?connectTimeout=60&socketTimeout=60&loginTimeout=60
     username: ${DATABASE_USERNAME:${DB_USERNAME}}
     password: ${DATABASE_PASSWORD:${DB_PASSWORD}}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
       minimum-idle: 1
-      connection-timeout: 60000
+      connection-timeout: 120000
       idle-timeout: 300000
       max-lifetime: 900000
-      initialization-fail-timeout: 60000
+      initialization-fail-timeout: -1
       keepalive-time: 30000
+      data-source-properties:
+        connectTimeout: 60
+        socketTimeout: 60
+        loginTimeout: 60
 
   jpa:
     hibernate:
@@ -32,6 +36,8 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
     validate-on-migrate: true
+    connect-retries: 10
+    connect-retries-interval: 5
 
   # Production cache settings - aggressive caching for Render free tier
   cache:
