@@ -25,8 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.Period;
 import java.math.BigDecimal;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -48,20 +51,14 @@ public class StudentService {
     @Cacheable(value = "students:all")
     public List<StudentResponse> getAllStudents() {
         log.debug("Cache miss: fetching all students from database");
-        return studentRepository.findAll().stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findAllWithDetails());
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "students:active")
     public List<StudentResponse> getActiveStudents() {
         log.debug("Cache miss: fetching active students from database");
-        return studentRepository.findAllActiveStudents().stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findAllActiveStudents());
     }
 
     @Transactional(readOnly = true)
@@ -77,40 +74,28 @@ public class StudentService {
     @Cacheable(value = "students:bySkillLevel", key = "#skillLevel")
     public List<StudentResponse> getStudentsBySkillLevel(SkillLevel skillLevel) {
         log.debug("Cache miss: fetching students by skill level {} from database", skillLevel);
-        return studentRepository.findBySkillLevel(skillLevel).stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findBySkillLevelWithDetails(skillLevel));
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "students:byParent", key = "#parentId")
     public List<StudentResponse> getStudentsByParent(Long parentId) {
         log.debug("Cache miss: fetching students by parent {} from database", parentId);
-        return studentRepository.findByParentId(parentId).stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findByParentIdWithDetails(parentId));
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "students:byBatch", key = "#batchId")
     public List<StudentResponse> getStudentsByBatch(Long batchId) {
         log.debug("Cache miss: fetching students by batch {} from database", batchId);
-        return studentRepository.findByBatchId(batchId).stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findByBatchId(batchId));
     }
 
     @Transactional(readOnly = true)
     @Cacheable(value = "students:byCoach", key = "#coachId")
     public List<StudentResponse> getStudentsByCoach(Long coachId) {
         log.debug("Cache miss: fetching students by coach {} from database", coachId);
-        return studentRepository.findByCoachId(coachId).stream()
-                .map(this::safeMapToStudentResponse)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        return mapStudentsWithAggregatedStats(studentRepository.findByCoachId(coachId));
     }
 
     @Transactional
@@ -339,6 +324,10 @@ public class StudentService {
     }
 
     private StudentResponse mapToStudentResponse(Student student) {
+        return mapToStudentResponse(student, null);
+    }
+
+    private StudentResponse mapToStudentResponse(Student student, AggregatedStudentStats aggregatedStats) {
         StudentResponse response = StudentResponse.builder()
                 .id(student.getId())
                 .firstName(student.getFirstName())
@@ -375,46 +364,204 @@ public class StudentService {
         }
 
         // Calculate statistics
-        try {
-            Long verifiedAchievements = achievementRepository.countVerifiedAchievementsByStudentId(student.getId());
-            response.setTotalAchievements(verifiedAchievements != null ? verifiedAchievements.intValue() : 0);
-        } catch (Exception ex) {
-            log.warn("Failed to calculate achievements for student {}: {}", student.getId(), ex.getMessage());
-            response.setTotalAchievements(0);
-        }
+        if (aggregatedStats != null) {
+            long verifiedAchievements = aggregatedStats.verifiedAchievementsByStudentId.getOrDefault(student.getId(), 0L);
+            response.setTotalAchievements((int) verifiedAchievements);
 
-        try {
-            Long presentCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.PRESENT));
-            Long absentCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.ABSENT));
-            Long lateCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.LATE));
-            Long totalAttendance = presentCount + absentCount + lateCount;
-            if (totalAttendance > 0) {
+            AttendanceCounts attendanceCounts = aggregatedStats.attendanceCountsByStudentId.get(student.getId());
+            long presentCount = attendanceCounts != null ? attendanceCounts.present : 0L;
+            long absentCount = attendanceCounts != null ? attendanceCounts.absent : 0L;
+            long lateCount = attendanceCounts != null ? attendanceCounts.late : 0L;
+            long totalAttendance = presentCount + absentCount + lateCount;
+            if (totalAttendance > 0L) {
                 response.setAttendancePercentage((presentCount * 100.0) / totalAttendance);
             } else {
                 response.setAttendancePercentage(0.0);
             }
-        } catch (Exception ex) {
-            log.warn("Failed to calculate attendance for student {}: {}", student.getId(), ex.getMessage());
-            response.setAttendancePercentage(0.0);
-        }
+            response.setAverageSkillRating(aggregatedStats.averageSkillRatingByStudentId.getOrDefault(student.getId(), 0.0));
+        } else {
+            try {
+                Long verifiedAchievements = achievementRepository.countVerifiedAchievementsByStudentId(student.getId());
+                response.setTotalAchievements(verifiedAchievements != null ? verifiedAchievements.intValue() : 0);
+            } catch (Exception ex) {
+                log.warn("Failed to calculate achievements for student {}: {}", student.getId(), ex.getMessage());
+                response.setTotalAchievements(0);
+            }
 
-        try {
-            Double averageSkillRating = skillEvaluationRepository.getAverageOverallScoreByStudentId(student.getId());
-            response.setAverageSkillRating(averageSkillRating != null ? averageSkillRating : 0.0);
-        } catch (Exception ex) {
-            log.warn("Failed to calculate skill rating for student {}: {}", student.getId(), ex.getMessage());
-            response.setAverageSkillRating(0.0);
+            try {
+                Long presentCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.PRESENT));
+                Long absentCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.ABSENT));
+                Long lateCount = defaultLong(attendanceRepository.countByStudentAndStatus(student.getId(), AttendanceStatus.LATE));
+                Long totalAttendance = presentCount + absentCount + lateCount;
+                if (totalAttendance > 0) {
+                    response.setAttendancePercentage((presentCount * 100.0) / totalAttendance);
+                } else {
+                    response.setAttendancePercentage(0.0);
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to calculate attendance for student {}: {}", student.getId(), ex.getMessage());
+                response.setAttendancePercentage(0.0);
+            }
+
+            try {
+                Double averageSkillRating = skillEvaluationRepository.getAverageOverallScoreByStudentId(student.getId());
+                response.setAverageSkillRating(averageSkillRating != null ? averageSkillRating : 0.0);
+            } catch (Exception ex) {
+                log.warn("Failed to calculate skill rating for student {}: {}", student.getId(), ex.getMessage());
+                response.setAverageSkillRating(0.0);
+            }
         }
 
         return response;
     }
 
     private StudentResponse safeMapToStudentResponse(Student student) {
+        return safeMapToStudentResponse(student, null);
+    }
+
+    private StudentResponse safeMapToStudentResponse(Student student, AggregatedStudentStats aggregatedStats) {
         try {
-            return mapToStudentResponse(student);
+            return mapToStudentResponse(student, aggregatedStats);
         } catch (Exception ex) {
             log.error("Failed to map student {} to response: {}", student != null ? student.getId() : null, ex.getMessage(), ex);
             return null;
+        }
+    }
+
+    private List<StudentResponse> mapStudentsWithAggregatedStats(List<Student> students) {
+        AggregatedStudentStats aggregatedStats = loadAggregatedStats(students);
+        return students.stream()
+                .map(student -> safeMapToStudentResponse(student, aggregatedStats))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private AggregatedStudentStats loadAggregatedStats(List<Student> students) {
+        if (students == null || students.isEmpty()) {
+            return AggregatedStudentStats.empty();
+        }
+
+        List<Long> studentIds = students.stream()
+                .map(Student::getId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (studentIds.isEmpty()) {
+            return AggregatedStudentStats.empty();
+        }
+
+        Map<Long, Long> verifiedAchievementsByStudentId = new HashMap<>();
+        Map<Long, AttendanceCounts> attendanceCountsByStudentId = new HashMap<>();
+        Map<Long, Double> averageSkillRatingByStudentId = new HashMap<>();
+
+        try {
+            List<Object[]> verifiedAchievementRows = achievementRepository.countVerifiedAchievementsByStudentIds(studentIds);
+            for (Object[] row : verifiedAchievementRows) {
+                Long studentId = asLong(row[0]);
+                Long achievementCount = asLong(row[1]);
+                if (studentId != null) {
+                    verifiedAchievementsByStudentId.put(studentId, achievementCount != null ? achievementCount : 0L);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to bulk fetch achievement counts for students: {}", ex.getMessage());
+        }
+
+        try {
+            List<Object[]> attendanceRows = attendanceRepository.aggregateAttendanceCountsByStudentIds(
+                    studentIds,
+                    AttendanceStatus.PRESENT,
+                    AttendanceStatus.ABSENT,
+                    AttendanceStatus.LATE
+            );
+            for (Object[] row : attendanceRows) {
+                Long studentId = asLong(row[0]);
+                Long presentCount = asLong(row[1]);
+                Long absentCount = asLong(row[2]);
+                Long lateCount = asLong(row[3]);
+                if (studentId != null) {
+                    attendanceCountsByStudentId.put(
+                            studentId,
+                            new AttendanceCounts(
+                                    presentCount != null ? presentCount : 0L,
+                                    absentCount != null ? absentCount : 0L,
+                                    lateCount != null ? lateCount : 0L
+                            )
+                    );
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to bulk fetch attendance counts for students: {}", ex.getMessage());
+        }
+
+        try {
+            List<Object[]> averageSkillRows = skillEvaluationRepository.getAverageOverallScoreByStudentIds(studentIds);
+            for (Object[] row : averageSkillRows) {
+                Long studentId = asLong(row[0]);
+                Double averageSkill = asDouble(row[1]);
+                if (studentId != null) {
+                    averageSkillRatingByStudentId.put(studentId, averageSkill != null ? averageSkill : 0.0);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to bulk fetch average skill ratings for students: {}", ex.getMessage());
+        }
+
+        return new AggregatedStudentStats(
+                verifiedAchievementsByStudentId,
+                attendanceCountsByStudentId,
+                averageSkillRatingByStudentId
+        );
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
+    private Double asDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        return null;
+    }
+
+    private static final class AggregatedStudentStats {
+        private final Map<Long, Long> verifiedAchievementsByStudentId;
+        private final Map<Long, AttendanceCounts> attendanceCountsByStudentId;
+        private final Map<Long, Double> averageSkillRatingByStudentId;
+
+        private AggregatedStudentStats(
+                Map<Long, Long> verifiedAchievementsByStudentId,
+                Map<Long, AttendanceCounts> attendanceCountsByStudentId,
+                Map<Long, Double> averageSkillRatingByStudentId
+        ) {
+            this.verifiedAchievementsByStudentId = verifiedAchievementsByStudentId;
+            this.attendanceCountsByStudentId = attendanceCountsByStudentId;
+            this.averageSkillRatingByStudentId = averageSkillRatingByStudentId;
+        }
+
+        private static AggregatedStudentStats empty() {
+            return new AggregatedStudentStats(
+                    Collections.emptyMap(),
+                    Collections.emptyMap(),
+                    Collections.emptyMap()
+            );
+        }
+    }
+
+    private static final class AttendanceCounts {
+        private final long present;
+        private final long absent;
+        private final long late;
+
+        private AttendanceCounts(long present, long absent, long late) {
+            this.present = present;
+            this.absent = absent;
+            this.late = late;
         }
     }
 

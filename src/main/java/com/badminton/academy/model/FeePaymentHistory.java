@@ -3,6 +3,7 @@ package com.badminton.academy.model;
 import com.badminton.academy.model.enums.MonthlyFeeStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -10,11 +11,17 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "fee_payment_history", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "year", "month"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "year", "month"}),
+       indexes = {
+           @Index(name = "idx_fee_history_student", columnList = "student_id"),
+           @Index(name = "idx_fee_history_year_month", columnList = "year, month"),
+           @Index(name = "idx_fee_history_status", columnList = "status")
+       })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@BatchSize(size = 50)
 public class FeePaymentHistory {
 
     @Id

@@ -4,6 +4,7 @@ import com.badminton.academy.model.enums.AttendanceStatus;
 import com.badminton.academy.model.enums.AttendanceEntryType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 
@@ -13,11 +14,16 @@ import java.time.LocalDateTime;
  * Essential for resolving parent disputes with evidence.
  */
 @Entity
-@Table(name = "attendance_audit_log")
+@Table(name = "attendance_audit_log", indexes = {
+    @Index(name = "idx_audit_attendance", columnList = "attendance_id"),
+    @Index(name = "idx_audit_changed_at", columnList = "changedAt"),
+    @Index(name = "idx_audit_changed_by", columnList = "changed_by_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@BatchSize(size = 50)
 public class AttendanceAuditLog {
 
     @Id

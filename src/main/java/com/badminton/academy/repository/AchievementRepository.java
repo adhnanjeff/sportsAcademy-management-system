@@ -40,6 +40,12 @@ public interface AchievementRepository extends JpaRepository<Achievement, Long> 
     @Query("SELECT COUNT(a) FROM Achievement a WHERE a.student.id = :studentId AND a.isVerified = true")
     Long countVerifiedAchievementsByStudentId(@Param("studentId") Long studentId);
 
+    @Query("SELECT a.student.id, COUNT(a) " +
+           "FROM Achievement a " +
+           "WHERE a.student.id IN :studentIds AND a.isVerified = true " +
+           "GROUP BY a.student.id")
+    List<Object[]> countVerifiedAchievementsByStudentIds(@Param("studentIds") List<Long> studentIds);
+
     @Query("SELECT a FROM Achievement a WHERE a.isVerified = false ORDER BY a.achievedDate DESC")
     List<Achievement> findPendingVerificationAchievements();
 

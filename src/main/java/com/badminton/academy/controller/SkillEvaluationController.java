@@ -1,7 +1,9 @@
 package com.badminton.academy.controller;
 
 import com.badminton.academy.dto.request.CreateSkillEvaluationRequest;
+import com.badminton.academy.dto.response.BatchAverageResponse;
 import com.badminton.academy.dto.response.MessageResponse;
+import com.badminton.academy.dto.response.PerformanceProgressResponse;
 import com.badminton.academy.dto.response.SkillEvaluationResponse;
 import com.badminton.academy.model.User;
 import com.badminton.academy.service.AuthService;
@@ -128,5 +130,31 @@ public class SkillEvaluationController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH') or @securityService.isCurrentUser(#studentId) or @securityService.isParentOfStudent(#studentId)")
     public ResponseEntity<Double> getAverageScore(@PathVariable Long studentId) {
         return ResponseEntity.ok(skillEvaluationService.getAverageScore(studentId));
+    }
+
+    @GetMapping("/batch/{batchId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<SkillEvaluationResponse>> getEvaluationsByBatch(@PathVariable Long batchId) {
+        return ResponseEntity.ok(skillEvaluationService.getEvaluationsByBatch(batchId));
+    }
+
+    @GetMapping("/batch/{batchId}/latest")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<SkillEvaluationResponse>> getLatestEvaluationsByBatch(@PathVariable Long batchId) {
+        return ResponseEntity.ok(skillEvaluationService.getLatestEvaluationsByBatch(batchId));
+    }
+
+    @GetMapping("/batch/{batchId}/average")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<BatchAverageResponse> getBatchAverage(@PathVariable Long batchId) {
+        return ResponseEntity.ok(skillEvaluationService.getBatchAverage(batchId));
+    }
+
+    @GetMapping("/student/{studentId}/progress")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH') or @securityService.isCurrentUser(#studentId) or @securityService.isParentOfStudent(#studentId)")
+    public ResponseEntity<PerformanceProgressResponse> getPerformanceProgress(@PathVariable Long studentId) {
+        Optional<PerformanceProgressResponse> progress = skillEvaluationService.getPerformanceProgress(studentId);
+        return progress.map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }

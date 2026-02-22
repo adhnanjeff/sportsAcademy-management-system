@@ -13,20 +13,29 @@ public class SkillEvaluationMapper {
 
         SkillEvaluationResponse response = new SkillEvaluationResponse();
         response.setId(evaluation.getId());
+        response.setSmashPower(evaluation.getSmashPower());
+        response.setNetControl(evaluation.getNetControl());
+        response.setBackhand(evaluation.getBackhand());
         response.setFootwork(evaluation.getFootwork());
-        response.setStrokes(evaluation.getStrokes());
-        response.setStamina(evaluation.getStamina());
-        response.setAttack(evaluation.getAttack());
-        response.setDefence(evaluation.getDefence());
         response.setAgility(evaluation.getAgility());
-        response.setCourtCoverage(evaluation.getCourtCoverage());
+        response.setStamina(evaluation.getStamina());
+        response.setTacticalAwareness(evaluation.getTacticalAwareness());
+        response.setMentalStrength(evaluation.getMentalStrength());
         response.setNotes(evaluation.getNotes());
         response.setEvaluatedAt(evaluation.getEvaluatedAt());
+        response.setMonth(evaluation.getMonth());
+        response.setYear(evaluation.getYear());
         response.setAverageScore(calculateAverageScore(evaluation));
 
         if (evaluation.getStudent() != null) {
             response.setStudentId(evaluation.getStudent().getId());
             response.setStudentName(evaluation.getStudent().getFullName());
+            // Get first batch if available
+            if (evaluation.getStudent().getBatches() != null && !evaluation.getStudent().getBatches().isEmpty()) {
+                var batch = evaluation.getStudent().getBatches().iterator().next();
+                response.setBatchId(batch.getId());
+                response.setBatchName(batch.getName());
+            }
         }
 
         if (evaluation.getEvaluatedBy() != null) {
@@ -41,13 +50,14 @@ public class SkillEvaluationMapper {
         if (request == null) return null;
 
         SkillEvaluation evaluation = new SkillEvaluation();
+        evaluation.setSmashPower(request.getSmashPower());
+        evaluation.setNetControl(request.getNetControl());
+        evaluation.setBackhand(request.getBackhand());
         evaluation.setFootwork(request.getFootwork());
-        evaluation.setStrokes(request.getStrokes());
-        evaluation.setStamina(request.getStamina());
-        evaluation.setAttack(request.getAttack());
-        evaluation.setDefence(request.getDefence());
         evaluation.setAgility(request.getAgility());
-        evaluation.setCourtCoverage(request.getCourtCoverage());
+        evaluation.setStamina(request.getStamina());
+        evaluation.setTacticalAwareness(request.getTacticalAwareness());
+        evaluation.setMentalStrength(request.getMentalStrength());
         evaluation.setNotes(request.getNotes());
         return evaluation;
     }
@@ -55,21 +65,22 @@ public class SkillEvaluationMapper {
     public void updateEntityFromRequest(CreateSkillEvaluationRequest request, SkillEvaluation evaluation) {
         if (request == null || evaluation == null) return;
 
+        if (request.getSmashPower() != null) evaluation.setSmashPower(request.getSmashPower());
+        if (request.getNetControl() != null) evaluation.setNetControl(request.getNetControl());
+        if (request.getBackhand() != null) evaluation.setBackhand(request.getBackhand());
         if (request.getFootwork() != null) evaluation.setFootwork(request.getFootwork());
-        if (request.getStrokes() != null) evaluation.setStrokes(request.getStrokes());
-        if (request.getStamina() != null) evaluation.setStamina(request.getStamina());
-        if (request.getAttack() != null) evaluation.setAttack(request.getAttack());
-        if (request.getDefence() != null) evaluation.setDefence(request.getDefence());
         if (request.getAgility() != null) evaluation.setAgility(request.getAgility());
-        if (request.getCourtCoverage() != null) evaluation.setCourtCoverage(request.getCourtCoverage());
+        if (request.getStamina() != null) evaluation.setStamina(request.getStamina());
+        if (request.getTacticalAwareness() != null) evaluation.setTacticalAwareness(request.getTacticalAwareness());
+        if (request.getMentalStrength() != null) evaluation.setMentalStrength(request.getMentalStrength());
         if (request.getNotes() != null) evaluation.setNotes(request.getNotes());
     }
 
     private Double calculateAverageScore(SkillEvaluation evaluation) {
         if (evaluation == null) return null;
-        return (evaluation.getFootwork() + evaluation.getStrokes() +
-                evaluation.getStamina() + evaluation.getAttack() +
-                evaluation.getDefence() + evaluation.getAgility() +
-                evaluation.getCourtCoverage()) / 7.0;
+        return (evaluation.getSmashPower() + evaluation.getNetControl() +
+                evaluation.getBackhand() + evaluation.getFootwork() +
+                evaluation.getAgility() + evaluation.getStamina() +
+                evaluation.getTacticalAwareness() + evaluation.getMentalStrength()) / 8.0;
     }
 }

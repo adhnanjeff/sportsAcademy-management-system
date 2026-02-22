@@ -54,9 +54,31 @@ public interface SkillEvaluationRepository extends JpaRepository<SkillEvaluation
     @Query("SELECT COUNT(se) FROM SkillEvaluation se WHERE se.evaluatedBy.id = :coachId")
     Long countByCoachId(@Param("coachId") Long coachId);
 
-    @Query("SELECT AVG((se.footwork + se.strokes + se.stamina + se.attack + se.defence + se.agility + se.courtCoverage) / 7.0) " +
+    @Query("SELECT AVG((se.smashPower + se.netControl + se.backhand + se.footwork + se.agility + se.stamina + se.tacticalAwareness + se.mentalStrength) / 8.0) " +
            "FROM SkillEvaluation se WHERE se.student.id = :studentId")
     Double getAverageOverallScoreByStudentId(@Param("studentId") Long studentId);
+
+    @Query("SELECT se.student.id, AVG((se.smashPower + se.netControl + se.backhand + se.footwork + se.agility + se.stamina + se.tacticalAwareness + se.mentalStrength) / 8.0) " +
+           "FROM SkillEvaluation se WHERE se.student.id IN :studentIds " +
+           "GROUP BY se.student.id")
+    List<Object[]> getAverageOverallScoreByStudentIds(@Param("studentIds") List<Long> studentIds);
+
+    // Find evaluations for students in a specific batch
+    @Query("SELECT se FROM SkillEvaluation se WHERE se.student IN " +
+           "(SELECT s FROM Student s JOIN s.batches b WHERE b.id = :batchId)")
+    List<SkillEvaluation> findByBatchId(@Param("batchId") Long batchId);
+
+    // Find latest evaluation for each student in a batch
+    @Query("SELECT se FROM SkillEvaluation se WHERE se.id IN " +
+           "(SELECT MAX(se2.id) FROM SkillEvaluation se2 WHERE se2.student IN " +
+           "(SELECT s FROM Student s JOIN s.batches b WHERE b.id = :batchId) " +
+           "GROUP BY se2.student.id)")
+    List<SkillEvaluation> findLatestByBatchId(@Param("batchId") Long batchId);
+
+    // Find first evaluation for a student (for progress comparison)
+    @Query("SELECT se FROM SkillEvaluation se WHERE se.student.id = :studentId " +
+           "ORDER BY se.evaluatedAt ASC LIMIT 1")
+    Optional<SkillEvaluation> findFirstByStudentId(@Param("studentId") Long studentId);
 
     @Modifying
     @Query("DELETE FROM SkillEvaluation se WHERE se.student.id = :studentId")

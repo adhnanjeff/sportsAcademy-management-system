@@ -14,28 +14,37 @@ import java.util.Optional;
 public interface StudentRepository extends JpaRepository<Student, Long> {
     
     Optional<Student> findByNationalIdNumber(String nationalIdNumber);
+
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek")
+    List<Student> findAllWithDetails();
     
     List<Student> findBySkillLevel(SkillLevel skillLevel);
+
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE s.skillLevel = :skillLevel")
+    List<Student> findBySkillLevelWithDetails(@Param("skillLevel") SkillLevel skillLevel);
     
     List<Student> findByParentId(Long parentId);
+
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE s.parent.id = :parentId")
+    List<Student> findByParentIdWithDetails(@Param("parentId") Long parentId);
     
-    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent WHERE s.isActive = true")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE s.isActive = true")
     List<Student> findAllActiveStudents();
     
-    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent WHERE b.id = :batchId")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE b.id = :batchId")
     List<Student> findByBatchId(@Param("batchId") Long batchId);
     
-    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent WHERE b.coach.id = :coachId")
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE b.coach.id = :coachId")
     List<Student> findByCoachId(@Param("coachId") Long coachId);
     
     @Query("SELECT COUNT(s) FROM Student s WHERE s.skillLevel = :skillLevel AND s.isActive = true")
     Long countBySkillLevel(@Param("skillLevel") SkillLevel skillLevel);
     
-    @Query("SELECT s FROM Student s LEFT JOIN FETCH s.batches WHERE s.parent.id = :parentId AND s.isActive = true")
+    @Query("SELECT s FROM Student s LEFT JOIN FETCH s.batches LEFT JOIN FETCH s.daysOfWeek WHERE s.parent.id = :parentId AND s.isActive = true")
     List<Student> findActiveStudentsByParentId(@Param("parentId") Long parentId);
 
     boolean existsByNationalIdNumber(String nationalIdNumber);
 
-    @Query("SELECT s FROM Student s WHERE LOWER(s.firstName) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(s.lastName) LIKE LOWER(CONCAT('%', :query, '%'))")
+    @Query("SELECT s FROM Student s LEFT JOIN FETCH s.daysOfWeek WHERE LOWER(s.firstName) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(s.lastName) LIKE LOWER(CONCAT('%', :query, '%'))")
     List<Student> searchByName(@Param("query") String query);
 }

@@ -49,6 +49,20 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
         @Param("studentId") Long studentId,
         @Param("status") AttendanceStatus status
     );
+
+    @Query("SELECT a.student.id, " +
+           "SUM(CASE WHEN a.status = :presentStatus THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN a.status = :absentStatus THEN 1 ELSE 0 END), " +
+           "SUM(CASE WHEN a.status = :lateStatus THEN 1 ELSE 0 END) " +
+           "FROM Attendance a " +
+           "WHERE a.student.id IN :studentIds " +
+           "GROUP BY a.student.id")
+    List<Object[]> aggregateAttendanceCountsByStudentIds(
+        @Param("studentIds") List<Long> studentIds,
+        @Param("presentStatus") AttendanceStatus presentStatus,
+        @Param("absentStatus") AttendanceStatus absentStatus,
+        @Param("lateStatus") AttendanceStatus lateStatus
+    );
     
     @Query("SELECT COUNT(a) FROM Attendance a WHERE a.student.id = :studentId " +
            "AND a.batch.id = :batchId AND a.status = 'PRESENT'")
@@ -72,14 +86,14 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
         @Param("batchId") Long batchId
     );
     
-    @Query("SELECT a FROM Attendance a WHERE a.batch.coach.id = :coachId " +
+    @Query("SELECT a FROM Attendance a JOIN FETCH a.student JOIN FETCH a.batch WHERE a.batch.coach.id = :coachId " +
            "AND a.date = :date")
     List<Attendance> findByCoachAndDate(
         @Param("coachId") Long coachId,
         @Param("date") LocalDate date
     );
     
-    @Query("SELECT a FROM Attendance a WHERE a.batch.id = :batchId AND a.date = :date")
+    @Query("SELECT a FROM Attendance a JOIN FETCH a.student JOIN FETCH a.batch WHERE a.batch.id = :batchId AND a.date = :date")
     List<Attendance> findByBatchAndDate(
         @Param("batchId") Long batchId,
         @Param("date") LocalDate date

@@ -2,15 +2,20 @@ package com.badminton.academy.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "otp_verifications")
+@Table(name = "otp_verifications", indexes = {
+    @Index(name = "idx_otp_phone_number", columnList = "phoneNumber"),
+    @Index(name = "idx_otp_expires_at", columnList = "expiresAt")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@BatchSize(size = 50)
 public class OtpVerification {
 
     @Id

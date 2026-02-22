@@ -3,6 +3,7 @@ package com.badminton.academy.model;
 import com.badminton.academy.model.enums.Role;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -13,12 +14,18 @@ import java.util.Collection;
 import java.util.List;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", indexes = {
+    @Index(name = "idx_users_email", columnList = "email"),
+    @Index(name = "idx_users_role", columnList = "role"),
+    @Index(name = "idx_users_active", columnList = "isActive"),
+    @Index(name = "idx_users_phone", columnList = "phoneNumber")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Inheritance(strategy = InheritanceType.JOINED)
+@BatchSize(size = 50)
 public class User implements UserDetails {
 
     @Id

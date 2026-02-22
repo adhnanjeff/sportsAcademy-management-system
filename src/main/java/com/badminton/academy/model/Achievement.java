@@ -3,24 +3,29 @@ package com.badminton.academy.model;
 import com.badminton.academy.model.enums.AchievementType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "achievements")
+@Table(name = "achievements", indexes = {
+    @Index(name = "idx_achievements_type", columnList = "type"),
+    @Index(name = "idx_achievements_date", columnList = "achievedDate")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(exclude = {"student", "verifiedBy"})
 @ToString(exclude = {"student", "verifiedBy"})
 @Builder
+@BatchSize(size = 50)
 public class Achievement {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
 
@@ -52,7 +57,7 @@ public class Achievement {
     private Boolean isVerified = false;
 
     // Coach who verified this achievement
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "verified_by")
     private Coach verifiedBy;
 }

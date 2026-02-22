@@ -4,30 +4,38 @@ import com.badminton.academy.model.enums.AttendanceStatus;
 import com.badminton.academy.model.enums.AttendanceEntryType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "attendance", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "batch_id", "date"}))
+       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "batch_id", "date"}),
+       indexes = {
+           @Index(name = "idx_attendance_date", columnList = "date"),
+           @Index(name = "idx_attendance_batch_date", columnList = "batch_id, date"),
+           @Index(name = "idx_attendance_student_date", columnList = "student_id, date"),
+           @Index(name = "idx_attendance_entry_type", columnList = "entryType")
+       })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(exclude = {"student", "batch", "markedBy"})
 @ToString(exclude = {"student", "batch", "markedBy"})
 @Builder
+@BatchSize(size = 50)
 public class Attendance {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "batch_id", nullable = false)
     private Batch batch;
 
@@ -56,7 +64,7 @@ public class Attendance {
 
     private String notes;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "marked_by")
     private Coach markedBy;
 

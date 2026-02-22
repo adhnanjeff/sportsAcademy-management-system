@@ -3,29 +3,36 @@ package com.badminton.academy.model;
 import com.badminton.academy.model.enums.AssessmentType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "assessments")
+@Table(name = "assessments", indexes = {
+    @Index(name = "idx_assessments_student_date", columnList = "student_id, assessmentDate"),
+    @Index(name = "idx_assessments_coach", columnList = "conducted_by"),
+    @Index(name = "idx_assessments_type", columnList = "type"),
+    @Index(name = "idx_assessments_date", columnList = "assessmentDate")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(exclude = {"student", "conductedBy"})
 @ToString(exclude = {"student", "conductedBy"})
 @Builder
+@BatchSize(size = 50)
 public class Assessment {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "conducted_by", nullable = false)
     private Coach conductedBy;
 

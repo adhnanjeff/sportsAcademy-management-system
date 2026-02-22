@@ -5,6 +5,7 @@ import com.badminton.academy.model.enums.MonthlyFeeStatus;
 import com.badminton.academy.model.enums.Gender;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
@@ -14,13 +15,19 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "students")
+@Table(name = "students", indexes = {
+    @Index(name = "idx_students_active", columnList = "isActive"),
+    @Index(name = "idx_students_skill_level", columnList = "skillLevel"),
+    @Index(name = "idx_students_parent", columnList = "parent_id"),
+    @Index(name = "idx_students_fee_status", columnList = "monthlyFeeStatus")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(exclude = {"parent", "batches", "attendances", "achievements", "skillEvaluations", "assessments"})
 @ToString(exclude = {"parent", "batches", "attendances", "achievements", "skillEvaluations", "assessments"})
+@BatchSize(size = 50)
 public class Student {
 
     @Id
@@ -65,10 +72,11 @@ public class Student {
     @Builder.Default
     private SkillLevel skillLevel = SkillLevel.BEGINNER;
 
-    @ElementCollection(targetClass = DayOfWeek.class)
+    @ElementCollection(targetClass = DayOfWeek.class, fetch = FetchType.EAGER)
     @CollectionTable(name = "student_training_days", joinColumns = @JoinColumn(name = "student_id"))
     @Column(name = "day_of_week")
     @Enumerated(EnumType.STRING)
+    @BatchSize(size = 100)
     @Builder.Default
     private Set<DayOfWeek> daysOfWeek = new HashSet<>();
 
@@ -80,27 +88,32 @@ public class Student {
     @Builder.Default
     private MonthlyFeeStatus monthlyFeeStatus = MonthlyFeeStatus.UNPAID;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private Parent parent;
 
     @ManyToMany(mappedBy = "students")
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<Batch> batches = new HashSet<>();
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<Attendance> attendances = new HashSet<>();
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<Achievement> achievements = new HashSet<>();
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<SkillEvaluation> skillEvaluations = new HashSet<>();
 
     @OneToMany(mappedBy = "student", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     @Builder.Default
     private Set<Assessment> assessments = new HashSet<>();
 
