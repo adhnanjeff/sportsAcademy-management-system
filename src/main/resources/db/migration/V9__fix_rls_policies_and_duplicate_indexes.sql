@@ -159,13 +159,82 @@ CREATE POLICY "backend_access_app_config" ON app_config
 -- Removing the duplicates to reduce storage and maintenance overhead
 -- =====================================================
 
--- attendance_audit_log: idx_audit_attendance_id (V4) duplicates idx_audit_attendance (V8)
--- Keep idx_audit_attendance (shorter name, same functionality)
-DROP INDEX IF EXISTS idx_audit_attendance_id;
+-- ==========================================
+-- attendance_audit_log duplicate indexes
+-- ==========================================
+-- V4 created: idx_audit_attendance_id, idx_audit_changed_by_id
+-- V8 created: idx_audit_attendance, idx_audit_changed_by (same columns)
+-- Keep the V8 versions (shorter names), drop V4 versions
 
--- attendance_audit_log: idx_audit_changed_by_id (V4) duplicates idx_audit_changed_by (V8)
--- Keep idx_audit_changed_by (shorter name, same functionality)
+DROP INDEX IF EXISTS idx_audit_attendance_id;
 DROP INDEX IF EXISTS idx_audit_changed_by_id;
+
+-- ==========================================
+-- attendance duplicate indexes (if any)
+-- ==========================================
+-- Check and clean up any attendance table duplicate indexes
+-- The foreign key doesn't auto-create indexes in PostgreSQL, but JPA might have
+
+-- Drop any duplicate student_id indexes (keep idx_attendance_student_status as it's composite)
+-- These might have been created by JPA/Hibernate at runtime
+DO $$
+DECLARE
+    idx_record RECORD;
+    idx_count INTEGER;
+BEGIN
+    -- Check for duplicate indexes on attendance(student_id) only
+    SELECT COUNT(*) INTO idx_count
+    FROM pg_indexes
+    WHERE tablename = 'attendance'
+      AND indexdef LIKE '%student_id%'
+      AND indexdef NOT LIKE '%student_id, status%'  -- Exclude composite
+      AND indexdef NOT LIKE '%student_id, date%';    -- Exclude composite
+    
+    IF idx_count > 1 THEN
+        -- Keep only the first one, this handles edge cases
+        FOR idx_record IN (
+            SELECT indexname 
+            FROM pg_indexes 
+            WHERE tablename = 'attendance' 
+              AND indexdef LIKE '%student_id%'
+              AND indexdef NOT LIKE '%student_id, status%'
+              AND indexdef NOT LIKE '%student_id, date%'
+            OFFSET 1
+        ) LOOP
+            EXECUTE 'DROP INDEX IF EXISTS ' || idx_record.indexname;
+        END LOOP;
+    END IF;
+END $$;
+
+-- ==========================================
+-- fee_payment_history duplicate indexes (if any)
+-- ==========================================
+-- Clean up any duplicate indexes on fee_payment_history
+
+DO $$
+DECLARE
+    idx_record RECORD;
+    idx_count INTEGER;
+BEGIN
+    -- Check for duplicate indexes on fee_payment_history(student_id) only
+    SELECT COUNT(*) INTO idx_count
+    FROM pg_indexes
+    WHERE tablename = 'fee_payment_history'
+      AND indexdef LIKE '%(student_id)%';
+    
+    IF idx_count > 1 THEN
+        -- Keep idx_fee_history_student, drop others
+        FOR idx_record IN (
+            SELECT indexname 
+            FROM pg_indexes 
+            WHERE tablename = 'fee_payment_history' 
+              AND indexdef LIKE '%(student_id)%'
+              AND indexname != 'idx_fee_history_student'
+        ) LOOP
+            EXECUTE 'DROP INDEX IF EXISTS ' || idx_record.indexname;
+        END LOOP;
+    END IF;
+END $$;
 
 -- =====================================================
 -- PART 3: Enable RLS on flyway_schema_history
