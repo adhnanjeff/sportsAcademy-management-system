@@ -27,7 +27,11 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
     
     boolean existsByStudentIdAndBatchIdAndDate(Long studentId, Long batchId, LocalDate date);
     
-    @Query("SELECT a FROM Attendance a WHERE a.student.id = :studentId " +
+    @Query("SELECT a FROM Attendance a " +
+           "JOIN FETCH a.student " +
+           "JOIN FETCH a.batch " +
+           "LEFT JOIN FETCH a.markedBy " +
+           "WHERE a.student.id = :studentId " +
            "AND a.date BETWEEN :startDate AND :endDate")
     List<Attendance> findByStudentAndDateRange(
         @Param("studentId") Long studentId,
@@ -35,7 +39,11 @@ public interface AttendanceRepository extends JpaRepository<Attendance, Long> {
         @Param("endDate") LocalDate endDate
     );
     
-    @Query("SELECT a FROM Attendance a WHERE a.batch.id = :batchId " +
+    @Query("SELECT a FROM Attendance a " +
+           "JOIN FETCH a.student " +
+           "JOIN FETCH a.batch " +
+           "LEFT JOIN FETCH a.markedBy " +
+           "WHERE a.batch.id = :batchId " +
            "AND a.date BETWEEN :startDate AND :endDate")
     List<Attendance> findByBatchAndDateRange(
         @Param("batchId") Long batchId,
