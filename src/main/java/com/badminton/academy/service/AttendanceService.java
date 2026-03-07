@@ -137,8 +137,7 @@ public class AttendanceService {
         Batch batch = batchRepository.findById(request.getBatchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + request.getBatchId()));
 
-        Coach coach = coachRepository.findById(coachId)
-                .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + coachId));
+        Coach coach = resolveActorCoach(coachId, isAdmin);
 
         AttendanceEntryType entryType = request.getEntryType() != null 
                 ? request.getEntryType() 
@@ -186,8 +185,7 @@ public class AttendanceService {
         Batch batch = batchRepository.findById(request.getBatchId())
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + request.getBatchId()));
 
-        Coach coach = coachRepository.findById(coachId)
-                .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + coachId));
+        Coach coach = resolveActorCoach(coachId, isAdmin);
 
         List<AttendanceResponse> responses = new ArrayList<>();
 
@@ -276,8 +274,7 @@ public class AttendanceService {
         boolean isBackdated = isBackdatedDate(attendance.getDate());
         validateBackdatePermission(attendance.getDate(), isAdmin, request.getBackdateReason());
 
-        Coach coach = coachRepository.findById(coachId)
-                .orElseThrow(() -> new ResourceNotFoundException("Coach not found with id: " + coachId));
+        Coach coach = resolveActorCoach(coachId, isAdmin);
 
         // Store previous values for audit
         AttendanceStatus prevStatus = attendance.getStatus();
@@ -639,6 +636,23 @@ public class AttendanceService {
     }
 
     // ==================== AUDIT LOG HELPER ====================
+
+    private Coach resolveActorCoach(Long actorUserId, boolean isAdmin) {
+        Coach coach = coachRepository.findById(actorUserId).orElse(null);
+        if (coach != null) {
+            return coach;
+        }
+
+        if (isAdmin) {
+            log.warn(
+                    "No coach profile found for admin user id {}. Saving attendance with null markedBy/changedBy.",
+                    actorUserId
+            );
+            return null;
+        }
+
+        throw new ResourceNotFoundException("Coach not found with id: " + actorUserId);
+    }
 
     private void createAuditLog(
             Attendance attendance,
