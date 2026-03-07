@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -27,21 +28,24 @@ public class AchievementService {
     private final AchievementRepository achievementRepository;
     private final StudentRepository studentRepository;
     private final CoachRepository coachRepository;
+    private final S3Service s3Service;
 
     public List<AchievementResponse> getAllAchievements() {
-        return achievementRepository.findAll().stream()
+        return achievementRepository.findAllWithStudentAndCoach().stream()
                 .map(this::mapToAchievementResponse)
                 .collect(Collectors.toList());
     }
 
     public AchievementResponse getAchievementById(Long id) {
-        Achievement achievement = achievementRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Achievement not found with id: " + id));
+        Achievement achievement = achievementRepository.findByIdWithDetails(id);
+        if (achievement == null) {
+            throw new ResourceNotFoundException("Achievement not found with id: " + id);
+        }
         return mapToAchievementResponse(achievement);
     }
 
     public List<AchievementResponse> getAchievementsByStudent(Long studentId) {
-        return achievementRepository.findByStudentId(studentId).stream()
+        return achievementRepository.findByStudentIdWithDetails(studentId).stream()
                 .map(this::mapToAchievementResponse)
                 .collect(Collectors.toList());
     }
@@ -77,7 +81,7 @@ public class AchievementService {
     }
 
     @Transactional
-    public AchievementResponse createAchievement(CreateAchievementRequest request) {
+    public AchievementResponse createAchievement(CreateAchievementRequest request, MultipartFile certificate) {
         Student student = studentRepository.findById(request.getStudentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + request.getStudentId()));
 
@@ -89,10 +93,18 @@ public class AchievementService {
                 .eventName(request.getEventName())
                 .position(request.getPosition())
                 .achievedDate(request.getAchievedDate())
-                .certificateUrl(request.getCertificateUrl())
                 .awardedBy(request.getAwardedBy())
                 .isVerified(false)
                 .build();
+
+        // Upload certificate if provided
+        if (certificate != null && !certificate.isEmpty()) {
+            String certificateKey = s3Service.uploadFileAndReturnKey(certificate, "achievements/certificates");
+            achievement.setCertificateUrl(certificateKey);
+            log.info("Certificate uploaded for achievement key: {}", certificateKey);
+        } else if (request.getCertificateUrl() != null) {
+            achievement.setCertificateUrl(request.getCertificateUrl());
+        }
 
         Achievement savedAchievement = achievementRepository.save(achievement);
         log.info("Achievement created for student {}: {}", request.getStudentId(), request.getTitle());
@@ -100,7 +112,7 @@ public class AchievementService {
     }
 
     @Transactional
-    public AchievementResponse updateAchievement(Long id, CreateAchievementRequest request) {
+    public AchievementResponse updateAchievement(Long id, CreateAchievementRequest request, MultipartFile newCertificate) {
         Achievement achievement = achievementRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Achievement not found with id: " + id));
 
@@ -110,8 +122,20 @@ public class AchievementService {
         if (request.getEventName() != null) achievement.setEventName(request.getEventName());
         if (request.getPosition() != null) achievement.setPosition(request.getPosition());
         if (request.getAchievedDate() != null) achievement.setAchievedDate(request.getAchievedDate());
-        if (request.getCertificateUrl() != null) achievement.setCertificateUrl(request.getCertificateUrl());
         if (request.getAwardedBy() != null) achievement.setAwardedBy(request.getAwardedBy());
+
+        // Handle certificate update
+        if (newCertificate != null && !newCertificate.isEmpty()) {
+            String newCertificateKey = s3Service.replaceFile(
+                    achievement.getCertificateUrl(),
+                    newCertificate,
+                    "achievements/certificates"
+            );
+            achievement.setCertificateUrl(newCertificateKey);
+            log.info("Certificate updated for achievement {} key: {}", id, newCertificateKey);
+        } else if (request.getCertificateUrl() != null) {
+            achievement.setCertificateUrl(request.getCertificateUrl());
+        }
 
         Achievement updatedAchievement = achievementRepository.save(achievement);
         log.info("Achievement updated: {}", id);
@@ -149,11 +173,34 @@ public class AchievementService {
 
     @Transactional
     public void deleteAchievement(Long id) {
-        if (!achievementRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Achievement not found with id: " + id);
+        Achievement achievement = achievementRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Achievement not found with id: " + id));
+
+        // Delete certificate from S3 if exists
+        if (achievement.getCertificateUrl() != null && !achievement.getCertificateUrl().isEmpty()) {
+            try {
+                s3Service.deleteFile(achievement.getCertificateUrl());
+                log.info("Deleted certificate from S3 for achievement id: {}", id);
+            } catch (Exception e) {
+                log.error("Failed to delete certificate from S3: {}", e.getMessage());
+            }
         }
+
         achievementRepository.deleteById(id);
         log.info("Achievement deleted with id: {}", id);
+    }
+
+    @Transactional
+    public void deleteCertificate(Long achievementId) {
+        Achievement achievement = achievementRepository.findById(achievementId)
+                .orElseThrow(() -> new ResourceNotFoundException("Achievement not found with id: " + achievementId));
+
+        if (achievement.getCertificateUrl() != null && !achievement.getCertificateUrl().isEmpty()) {
+            s3Service.deleteFile(achievement.getCertificateUrl());
+            achievement.setCertificateUrl(null);
+            achievementRepository.save(achievement);
+            log.info("Deleted certificate for achievement id: {}", achievementId);
+        }
     }
 
     public Long countVerifiedAchievements(Long studentId) {
@@ -171,7 +218,7 @@ public class AchievementService {
                 .eventName(achievement.getEventName())
                 .position(achievement.getPosition())
                 .achievedDate(achievement.getAchievedDate())
-                .certificateUrl(achievement.getCertificateUrl())
+                .certificateUrl(s3Service.resolveFileUrl(achievement.getCertificateUrl()))
                 .awardedBy(achievement.getAwardedBy())
                 .isVerified(achievement.getIsVerified())
                 .verifiedById(achievement.getVerifiedBy() != null ? achievement.getVerifiedBy().getId() : null)

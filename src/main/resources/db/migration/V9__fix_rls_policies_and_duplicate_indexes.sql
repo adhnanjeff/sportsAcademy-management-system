@@ -37,6 +37,15 @@ DROP POLICY IF EXISTS "Service role has full access to fee_payment_history" ON f
 DROP POLICY IF EXISTS "Service role has full access to otp_verifications" ON otp_verifications;
 DROP POLICY IF EXISTS "Service role has full access to app_config" ON app_config;
 
+-- Ensure service_role exists in local/non-Supabase environments
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+        CREATE ROLE service_role NOLOGIN;
+    END IF;
+END
+$$;
+
 -- Create new policies that restrict to service_role only
 -- These use a simple role check that works in Supabase PostgreSQL
 -- The TO clause specifies which roles the policy applies to

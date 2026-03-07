@@ -11,9 +11,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -78,19 +80,22 @@ public class AchievementController {
         return ResponseEntity.ok(achievementService.getPendingVerificationAchievements());
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH') or hasRole('STUDENT')")
-    public ResponseEntity<AchievementResponse> createAchievement(@Valid @RequestBody CreateAchievementRequest request) {
-        AchievementResponse response = achievementService.createAchievement(request);
+    public ResponseEntity<AchievementResponse> createAchievement(
+            @Valid @RequestPart("achievement") CreateAchievementRequest request,
+            @RequestPart(value = "certificate", required = false) MultipartFile certificate) {
+        AchievementResponse response = achievementService.createAchievement(request, certificate);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<AchievementResponse> updateAchievement(
             @PathVariable Long id,
-            @Valid @RequestBody CreateAchievementRequest request) {
-        return ResponseEntity.ok(achievementService.updateAchievement(id, request));
+            @Valid @RequestPart("achievement") CreateAchievementRequest request,
+            @RequestPart(value = "certificate", required = false) MultipartFile certificate) {
+        return ResponseEntity.ok(achievementService.updateAchievement(id, request, certificate));
     }
 
     @PutMapping("/{id}/verify")
@@ -107,10 +112,17 @@ public class AchievementController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<MessageResponse> deleteAchievement(@PathVariable Long id) {
         achievementService.deleteAchievement(id);
         return ResponseEntity.ok(MessageResponse.success("Achievement deleted successfully"));
+    }
+
+    @DeleteMapping("/{id}/certificate")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<MessageResponse> deleteCertificate(@PathVariable Long id) {
+        achievementService.deleteCertificate(id);
+        return ResponseEntity.ok(MessageResponse.success("Certificate deleted successfully"));
     }
 
     @GetMapping("/student/{studentId}/count/verified")

@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(name = "skill_evaluations", indexes = {
     @Index(name = "idx_skill_eval_student_date", columnList = "student_id, evaluatedAt"),
     @Index(name = "idx_skill_eval_coach", columnList = "evaluated_by"),
-    @Index(name = "idx_skill_eval_month_year", columnList = "month, year")
+    @Index(name = "idx_skill_eval_month_year", columnList = "\"month\", \"year\"")
 })
 @Data
 @NoArgsConstructor
@@ -65,7 +65,9 @@ public class SkillEvaluation {
     private LocalDateTime evaluatedAt;
 
     // Month and year for easy filtering
+    @Column(name = "\"month\"")
     private Integer month;
+    @Column(name = "\"year\"")
     private Integer year;
 
     @PrePersist

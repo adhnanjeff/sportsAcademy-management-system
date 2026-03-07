@@ -35,6 +35,13 @@ public class GlobalExceptionHandler {
                 .body(MessageResponse.error(ex.getMessage()));
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<MessageResponse> handleBadRequestException(BadRequestException ex) {
+        log.error("Bad request: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(MessageResponse.error(ex.getMessage()));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<MessageResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.error("Invalid argument: {}", ex.getMessage());

@@ -14,6 +14,15 @@ import java.util.List;
 @Repository
 public interface AchievementRepository extends JpaRepository<Achievement, Long> {
 
+    @Query("SELECT a FROM Achievement a LEFT JOIN FETCH a.student LEFT JOIN FETCH a.verifiedBy")
+    List<Achievement> findAllWithStudentAndCoach();
+
+    @Query("SELECT a FROM Achievement a LEFT JOIN FETCH a.student LEFT JOIN FETCH a.verifiedBy WHERE a.student.id = :studentId")
+    List<Achievement> findByStudentIdWithDetails(@Param("studentId") Long studentId);
+
+    @Query("SELECT a FROM Achievement a LEFT JOIN FETCH a.student LEFT JOIN FETCH a.verifiedBy WHERE a.id = :id")
+    Achievement findByIdWithDetails(@Param("id") Long id);
+
     List<Achievement> findByStudentId(Long studentId);
 
     List<Achievement> findByType(AchievementType type);

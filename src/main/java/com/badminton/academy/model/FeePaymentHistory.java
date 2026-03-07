@@ -11,10 +11,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "fee_payment_history", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "year", "month"}),
+       uniqueConstraints = @UniqueConstraint(columnNames = {"student_id", "\"year\"", "\"month\""}),
        indexes = {
            @Index(name = "idx_fee_history_student", columnList = "student_id"),
-           @Index(name = "idx_fee_history_year_month", columnList = "year, month"),
+           @Index(name = "idx_fee_history_year_month", columnList = "\"year\", \"month\""),
            @Index(name = "idx_fee_history_status", columnList = "status")
        })
 @Data
@@ -32,10 +32,10 @@ public class FeePaymentHistory {
     @JoinColumn(name = "student_id", nullable = false)
     private Student student;
 
-    @Column(nullable = false)
+    @Column(name = "\"year\"", nullable = false)
     private Integer year;
 
-    @Column(nullable = false)
+    @Column(name = "\"month\"", nullable = false)
     private Integer month;
 
     @Column(name = "month_name", nullable = false)

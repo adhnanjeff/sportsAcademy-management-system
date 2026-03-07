@@ -88,3 +88,18 @@ attendance:
   backdate:
     coach-window-days: 7  # Coaches can backdate attendance up to 7 days
     admin-window-days: 30 # Admins can backdate attendance up to 30 days
+
+# AWS S3 Configuration
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET_NAME:badminton-academy-images}
+    region: ${AWS_S3_REGION:us-east-1}
+    access-key: ${AWS_ACCESS_KEY:your-access-key}
+    secret-key: ${AWS_SECRET_KEY:your-secret-key}
+    max-file-size: 10485760  # 10MB
+    allowed-file-types:
+      - image/jpeg
+      - image/png
+      - image/jpg
+      - image/gif
+      - image/webp
