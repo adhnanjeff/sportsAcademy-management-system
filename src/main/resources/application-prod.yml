@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/badminton_academy}
+    url: jdbc:postgresql://${DATABASE_HOST:localhost}:${DATABASE_PORT:5432}/${DATABASE_NAME:badminton_academy}
     username: ${DATABASE_USERNAME:postgres}
     password: ${DATABASE_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
@@ -81,26 +81,6 @@ management:
   endpoint:
     health:
       show-details: when-authorized
-  health:
-    db:
-      enabled: true
-
-logging:
-  level:
-    com.badminton.academy: INFO
-    org.flywaydb: INFO
-    org.hibernate.SQL: WARN
-    org.hibernate.type.descriptor.sql: WARN
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: when-authorized
       probes:
         enabled: true
   health:
@@ -111,7 +91,14 @@ management:
     readinessState:
       enabled: true
 
+logging:
+  level:
+    com.badminton.academy: INFO
+    org.flywaydb: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql: WARN
+
 app:
   seed-data: false
   cors:
-    allowed-origins: https://sports-academy-management-system-ui-wine.vercel.app
+    allowed-origins: ${FRONTEND_URL:https://sports-academy-management-system-ui-wine.vercel.app}
