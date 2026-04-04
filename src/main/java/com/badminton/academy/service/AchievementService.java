@@ -263,7 +263,7 @@ public class AchievementService {
         for (Achievement achievement : achievements) {
             achievement.setIsVerified(verified);
             if (verified && currentUser != null) {
-                Coach coach = coachRepository.findByUserId(currentUser.getId())
+                Coach coach = coachRepository.findById(currentUser.getId())
                     .orElse(null);
                 achievement.setVerifiedBy(coach);
             } else if (!verified) {

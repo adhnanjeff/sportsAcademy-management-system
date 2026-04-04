@@ -72,6 +72,19 @@ spring:
     caffeine:
       spec: maximumSize=3000,expireAfterWrite=60m
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+
 logging:
   level:
     com.badminton.academy: INFO

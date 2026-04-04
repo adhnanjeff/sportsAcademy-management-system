@@ -14,8 +14,7 @@ public interface CoachRepository extends JpaRepository<Coach, Long> {
     
     Optional<Coach> findByEmail(String email);
     
-    @Query("SELECT c FROM Coach c WHERE c.user.id = :userId")
-    Optional<Coach> findByUserId(@Param("userId") Long userId);
+    Optional<Coach> findById(Long userId);
     
     @Query("SELECT c FROM Coach c WHERE c.isActive = true")
     List<Coach> findAllActiveCoaches();

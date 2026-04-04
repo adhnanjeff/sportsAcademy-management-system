@@ -6,8 +6,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: adhnanjeff26@gmail.com
-    password: qtfo jaby sqgl okoj
+    username: ${MAIL_USERNAME:adhnanjeff26@gmail.com}
+    password: ${MAIL_PASSWORD:qtfo-jaby-sqgl-okoj}
     properties:
       mail:
         smtp:
@@ -80,9 +80,7 @@ app:
     from: ${MAIL_FROM:adhnanjeff26@gmail.com}
   cors:
     allowed-origins:
-      - http://localhost:4200
-      - http://127.0.0.1:4200
-      - http://localhost:3000
+      - ${FRONTEND_URL:http://localhost:4200}
 
 # Attendance Configuration
 attendance:
