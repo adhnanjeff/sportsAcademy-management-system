@@ -1,7 +1,3 @@
-server:
-  port: ${PORT:8080}
-  shutdown: graceful
-
 spring:
   application:
     name: badminton-academy-management
@@ -49,7 +45,8 @@ spring:
       spec: maximumSize=2000,expireAfterWrite=30m
 
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
   error:
     include-message: always
     include-binding-errors: always
