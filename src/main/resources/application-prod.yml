@@ -1,21 +1,22 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   datasource:
-    url: ${DATABASE_URL:${DB_URL}} 
-    username: ${DATABASE_USERNAME:${DB_USERNAME}}
-    password: ${DATABASE_PASSWORD:${DB_PASSWORD}}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/badminton_academy}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:password}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 5
+      maximum-pool-size: 3
       minimum-idle: 1
-      connection-timeout: 120000
-      idle-timeout: 300000
-      max-lifetime: 900000
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
       initialization-fail-timeout: -1
       keepalive-time: 30000
-      data-source-properties:
-        connectTimeout: 60
-        socketTimeout: 60
-        loginTimeout: 60
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
 
   jpa:
     hibernate:
@@ -77,6 +78,25 @@ logging:
     org.flywaydb: INFO
     org.hibernate.SQL: WARN
     org.hibernate.type.descriptor.sql: WARN
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: true
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
 
 app:
   seed-data: false
