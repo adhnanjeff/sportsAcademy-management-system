@@ -1,5 +1,6 @@
 package com.badminton.academy.controller;
 
+import com.badminton.academy.annotation.RateLimit;
 import com.badminton.academy.dto.request.CreateAchievementRequest;
 import com.badminton.academy.dto.response.AchievementResponse;
 import com.badminton.academy.dto.response.MessageResponse;
@@ -129,5 +130,44 @@ public class AchievementController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH') or @securityService.isCurrentUser(#studentId)")
     public ResponseEntity<Long> countVerifiedAchievements(@PathVariable Long studentId) {
         return ResponseEntity.ok(achievementService.countVerifiedAchievements(studentId));
+    }
+
+    // Bulk Operations
+
+    @PostMapping("/bulk-delete")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
+    public ResponseEntity<MessageResponse> bulkDeleteAchievements(@RequestBody BulkIdsRequest request) {
+        User currentUser = authService.getCurrentUser();
+        achievementService.bulkDeleteAchievements(request.getIds(), currentUser);
+        return ResponseEntity.ok(MessageResponse.success(
+            String.format("Successfully deleted %d achievement(s)", request.getIds().size())
+        ));
+    }
+
+    @PostMapping("/bulk-verify")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    @RateLimit(maxRequests = 5, windowSeconds = 60)
+    public ResponseEntity<MessageResponse> bulkVerifyAchievements(@RequestBody BulkVerifyRequest request) {
+        User currentUser = authService.getCurrentUser();
+        achievementService.bulkVerifyAchievements(request.getIds(), request.isVerified(), currentUser);
+        return ResponseEntity.ok(MessageResponse.success(
+            String.format("Successfully %s %d achievement(s)", 
+                request.isVerified() ? "verified" : "unverified",
+                request.getIds().size())
+        ));
+    }
+
+    // DTO Classes for bulk operations
+
+    @lombok.Data
+    public static class BulkIdsRequest {
+        private List<Long> ids;
+    }
+
+    @lombok.Data
+    public static class BulkVerifyRequest {
+        private List<Long> ids;
+        private boolean verified;
     }
 }

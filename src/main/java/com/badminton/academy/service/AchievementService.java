@@ -6,7 +6,10 @@ import com.badminton.academy.exception.ResourceNotFoundException;
 import com.badminton.academy.model.Achievement;
 import com.badminton.academy.model.Coach;
 import com.badminton.academy.model.Student;
+import com.badminton.academy.model.User;
 import com.badminton.academy.model.enums.AchievementType;
+import com.badminton.academy.model.enums.ActivityAction;
+import com.badminton.academy.model.enums.EntityType;
 import com.badminton.academy.repository.AchievementRepository;
 import com.badminton.academy.repository.CoachRepository;
 import com.badminton.academy.repository.StudentRepository;
@@ -29,6 +32,7 @@ public class AchievementService {
     private final StudentRepository studentRepository;
     private final CoachRepository coachRepository;
     private final S3Service s3Service;
+    private final ActivityLogService activityLogService;
 
     public List<AchievementResponse> getAllAchievements() {
         return achievementRepository.findAllWithStudentAndCoach().stream()
@@ -205,6 +209,82 @@ public class AchievementService {
 
     public Long countVerifiedAchievements(Long studentId) {
         return achievementRepository.countVerifiedAchievementsByStudentId(studentId);
+    }
+
+    /**
+     * Bulk delete achievements
+     */
+    @Transactional
+    public void bulkDeleteAchievements(List<Long> achievementIds, User currentUser) {
+        log.info("Bulk deleting {} achievements", achievementIds.size());
+        
+        List<Achievement> achievements = achievementRepository.findAllById(achievementIds);
+        
+        // Delete certificate files from S3
+        for (Achievement achievement : achievements) {
+            if (achievement.getCertificateUrl() != null) {
+                try {
+                    s3Service.deleteFile(achievement.getCertificateUrl());
+                } catch (Exception e) {
+                    log.warn("Failed to delete certificate for achievement {}: {}", achievement.getId(), e.getMessage());
+                }
+            }
+        }
+        
+        // Delete achievements
+        achievementRepository.deleteAllById(achievementIds);
+        
+        // Log activity
+        activityLogService.logActivity(
+            ActivityAction.BULK_DELETE,
+            EntityType.ACHIEVEMENT,
+            0L, // No specific entity ID for bulk operations
+            String.format("Bulk deleted %d achievements", achievementIds.size()),
+            currentUser
+        );
+        
+        log.info("Successfully bulk deleted {} achievements", achievementIds.size());
+    }
+
+    /**
+     * Bulk verify/unverify achievements
+     */
+    @Transactional
+    public void bulkVerifyAchievements(List<Long> achievementIds, boolean verified, User currentUser) {
+        log.info("Bulk {} {} achievements", verified ? "verifying" : "unverifying", achievementIds.size());
+        
+        List<Achievement> achievements = achievementRepository.findAllById(achievementIds);
+        
+        if (achievements.size() != achievementIds.size()) {
+            log.warn("Some achievements not found. Requested: {}, Found: {}", 
+                achievementIds.size(), achievements.size());
+        }
+        
+        for (Achievement achievement : achievements) {
+            achievement.setIsVerified(verified);
+            if (verified && currentUser != null) {
+                Coach coach = coachRepository.findByUserId(currentUser.getId())
+                    .orElse(null);
+                achievement.setVerifiedBy(coach);
+            } else if (!verified) {
+                achievement.setVerifiedBy(null);
+            }
+        }
+        
+        achievementRepository.saveAll(achievements);
+        
+        // Log activity
+        activityLogService.logActivity(
+            ActivityAction.BULK_VERIFY,
+            EntityType.ACHIEVEMENT,
+            0L,
+            String.format("Bulk %s %d achievements", 
+                verified ? "verified" : "unverified", achievementIds.size()),
+            currentUser
+        );
+        
+        log.info("Successfully bulk {} {} achievements", 
+            verified ? "verified" : "unverified", achievements.size());
     }
 
     private AchievementResponse mapToAchievementResponse(Achievement achievement) {
