@@ -299,6 +299,22 @@ public class StudentService {
         @CacheEvict(value = "students:active", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#id"),
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
+    })
+    public void activateStudent(Long id) {
+        Student student = studentRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
+        student.setIsActive(true);
+        studentRepository.save(student);
+        log.info("Student activated: {} {}", student.getFirstName(), student.getLastName());
+    }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true),
+        @CacheEvict(value = "students:byId", key = "#id"),
+        @CacheEvict(value = "students:bySkillLevel", allEntries = true),
         @CacheEvict(value = "students:byParent", allEntries = true),
         @CacheEvict(value = "students:byBatch", allEntries = true),
         @CacheEvict(value = "students:byCoach", allEntries = true),

@@ -87,7 +87,7 @@ public class BatchController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<BatchResponse> updateBatch(@PathVariable Long id, @Valid @RequestBody UpdateBatchRequest request) {
         return ResponseEntity.ok(batchService.updateBatch(id, request));
     }
@@ -105,14 +105,14 @@ public class BatchController {
     }
 
     @PutMapping("/{id}/deactivate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<MessageResponse> deactivateBatch(@PathVariable Long id) {
         batchService.deactivateBatch(id);
         return ResponseEntity.ok(MessageResponse.success("Batch deactivated successfully"));
     }
 
     @PutMapping("/{id}/activate")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<MessageResponse> activateBatch(@PathVariable Long id) {
         batchService.activateBatch(id);
         return ResponseEntity.ok(MessageResponse.success("Batch activated successfully"));

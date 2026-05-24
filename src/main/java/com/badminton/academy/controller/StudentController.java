@@ -96,6 +96,13 @@ public class StudentController {
         return ResponseEntity.ok(MessageResponse.success("Student deactivated successfully"));
     }
 
+    @PutMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<MessageResponse> activateStudent(@PathVariable Long id) {
+        studentService.activateStudent(id);
+        return ResponseEntity.ok(MessageResponse.success("Student activated successfully"));
+    }
+
     @GetMapping("/count/skill-level/{skillLevel}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<Long> countBySkillLevel(@PathVariable SkillLevel skillLevel) {
