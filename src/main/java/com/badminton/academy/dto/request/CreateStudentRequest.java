@@ -34,6 +34,7 @@ public class CreateStudentRequest {
 
     private String nationalIdNumber;
     private String phoneNumber;
+    private String email;
     private String photoUrl;
     private String address;
     private String city;

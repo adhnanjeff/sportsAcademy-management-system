@@ -25,6 +25,7 @@ public class UpdateStudentRequest {
     private LocalDate dateOfBirth;
     private String nationalIdNumber;
     private String phoneNumber;
+    private String email;
     private String photoUrl;
     private String address;
     private String city;

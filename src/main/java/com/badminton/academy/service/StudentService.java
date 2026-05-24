@@ -124,6 +124,7 @@ public class StudentService {
                 .dateOfBirth(request.getDateOfBirth())
                 .nationalIdNumber(request.getNationalIdNumber())
                 .phoneNumber(request.getPhoneNumber())
+                .email(request.getEmail())
                 .photoUrl(request.getPhotoUrl())
                 .address(request.getAddress())
                 .city(request.getCity())
@@ -189,6 +190,7 @@ public class StudentService {
         }
         if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
         if (request.getPhoneNumber() != null) student.setPhoneNumber(request.getPhoneNumber().trim());
+        if (request.getEmail() != null) student.setEmail(request.getEmail().trim());
         if (request.getAddress() != null) student.setAddress(request.getAddress());
         if (request.getCity() != null) student.setCity(request.getCity());
         if (request.getState() != null) student.setState(request.getState());
@@ -229,6 +231,16 @@ public class StudentService {
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
 
+        // Check if student is already in this batch to prevent duplicate key violation
+        boolean alreadyInBatch = batch.getStudents().stream()
+                .anyMatch(s -> s.getId().equals(studentId));
+        
+        if (alreadyInBatch) {
+            log.info("Student {} is already assigned to batch {}, skipping", studentId, batchId);
+            return mapToStudentResponse(student);
+        }
+
+        // Add bidirectional relationship
         student.getBatches().add(batch);
         batch.getStudents().add(student);
 
@@ -337,6 +349,7 @@ public class StudentService {
                 .age(calculateAge(student.getDateOfBirth()))
                 .photoUrl(student.getPhotoUrl())
                 .phoneNumber(student.getPhoneNumber())
+                .email(student.getEmail())
                 .address(student.getAddress())
                 .city(student.getCity())
                 .state(student.getState())

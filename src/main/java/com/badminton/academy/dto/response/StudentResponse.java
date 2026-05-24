@@ -30,6 +30,7 @@ public class StudentResponse {
     private Integer age;
     private String photoUrl;
     private String phoneNumber;
+    private String email;
     private String address;
     private String city;
     private String state;
