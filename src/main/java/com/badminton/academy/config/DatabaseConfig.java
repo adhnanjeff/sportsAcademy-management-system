@@ -1,6 +1,5 @@
 package com.badminton.academy.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -10,8 +9,8 @@ import javax.sql.DataSource;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Database configuration for production environment.
@@ -25,11 +24,11 @@ public class DatabaseConfig {
     /**
      * Creates a DataSource bean for production environment.
      * Properly parses Render's postgres:// URL to extract username, password, and host.
+     * Supports multiple URL formats including internal Render URLs.
      * 
      * @return Configured HikariDataSource
      */
     @Bean
-    @ConfigurationProperties(prefix = "spring.datasource.hikari")
     public DataSource dataSource() {
         String databaseUrl = System.getenv("DATABASE_URL");
         
@@ -38,50 +37,80 @@ public class DatabaseConfig {
         }
         
         log.info("Configuring database connection...");
+        log.info("DATABASE_URL format detected: {}", databaseUrl.substring(0, Math.min(30, databaseUrl.length())) + "...");
         
         HikariConfig config = new HikariConfig();
         
-        try {
-            // Parse the DATABASE_URL (format: postgres://user:password@host:port/database)
-            URI dbUri = new URI(databaseUrl);
+        // Pattern to parse postgres://user:password@host:port/database or variations
+        // Also handles URLs without database path (uses query params instead)
+        Pattern pattern = Pattern.compile(
+            "postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\\d+))?(?:/([^?]+))?(?:\\?(.+))?"
+        );
+        
+        Matcher matcher = pattern.matcher(databaseUrl);
+        
+        if (matcher.matches()) {
+            String username = matcher.group(1);
+            String password = matcher.group(2);
+            String host = matcher.group(3);
+            String portStr = matcher.group(4);
+            String database = matcher.group(5);
+            String queryParams = matcher.group(6);
             
-            String username = null;
-            String password = null;
+            int port = (portStr != null && !portStr.isEmpty()) ? Integer.parseInt(portStr) : 5432;
             
-            // Extract username and password from userInfo
-            if (dbUri.getUserInfo() != null) {
-                String[] userInfo = dbUri.getUserInfo().split(":", 2);
-                username = userInfo[0];
-                if (userInfo.length > 1) {
-                    password = userInfo[1];
+            // If database is null/empty, check for 'dbname' in query params
+            if (database == null || database.isEmpty()) {
+                if (queryParams != null) {
+                    Pattern dbPattern = Pattern.compile("dbname=([^&]+)");
+                    Matcher dbMatcher = dbPattern.matcher(queryParams);
+                    if (dbMatcher.find()) {
+                        database = dbMatcher.group(1);
+                    }
+                }
+                // Default database name if not found
+                if (database == null || database.isEmpty()) {
+                    database = username; // PostgreSQL default: database same as username
                 }
             }
             
-            // Build JDBC URL with SSL for Render
-            String host = dbUri.getHost();
-            int port = dbUri.getPort() > 0 ? dbUri.getPort() : 5432;
-            String database = dbUri.getPath().substring(1); // Remove leading slash
-            
             // Build JDBC URL with proper SSL settings for Render PostgreSQL
-            String jdbcUrl = String.format(
-                "jdbc:postgresql://%s:%d/%s?sslmode=require",
-                host, port, database
-            );
+            StringBuilder jdbcUrl = new StringBuilder();
+            jdbcUrl.append("jdbc:postgresql://").append(host).append(":").append(port).append("/").append(database);
+            jdbcUrl.append("?sslmode=require");
+            
+            // Append any additional query parameters (but skip sslmode if already present)
+            if (queryParams != null && !queryParams.isEmpty()) {
+                for (String param : queryParams.split("&")) {
+                    if (!param.startsWith("sslmode=") && !param.startsWith("dbname=")) {
+                        jdbcUrl.append("&").append(param);
+                    }
+                }
+            }
             
             log.info("Database host: {}, port: {}, database: {}", host, port, database);
             
+            config.setJdbcUrl(jdbcUrl.toString());
+            config.setUsername(username);
+            config.setPassword(password);
+            
+        } else {
+            // Fallback: try simple replacement for JDBC format
+            log.warn("Could not parse DATABASE_URL with regex, attempting simple conversion");
+            String jdbcUrl = databaseUrl;
+            if (jdbcUrl.startsWith("postgres://")) {
+                jdbcUrl = jdbcUrl.replace("postgres://", "jdbc:postgresql://");
+            } else if (jdbcUrl.startsWith("postgresql://")) {
+                jdbcUrl = jdbcUrl.replace("postgresql://", "jdbc:postgresql://");
+            }
+            
+            // Add SSL if not present
+            if (!jdbcUrl.contains("sslmode=")) {
+                jdbcUrl += (jdbcUrl.contains("?") ? "&" : "?") + "sslmode=require";
+            }
+            
             config.setJdbcUrl(jdbcUrl);
-            
-            if (username != null) {
-                config.setUsername(username);
-            }
-            if (password != null) {
-                config.setPassword(password);
-            }
-            
-        } catch (URISyntaxException e) {
-            log.error("Failed to parse DATABASE_URL", e);
-            throw new IllegalStateException("Invalid DATABASE_URL format: " + e.getMessage());
+            log.info("Using JDBC URL: {}", jdbcUrl.substring(0, Math.min(50, jdbcUrl.length())) + "...");
         }
         
         // Connection pool settings optimized for Render free tier
