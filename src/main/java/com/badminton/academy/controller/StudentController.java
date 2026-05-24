@@ -103,6 +103,15 @@ public class StudentController {
         return ResponseEntity.ok(MessageResponse.success("Student activated successfully"));
     }
 
+    // DELETE endpoint now performs soft delete (deactivate) instead of hard delete
+    // This ensures backwards compatibility with cached clients
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<MessageResponse> deleteStudent(@PathVariable Long id) {
+        studentService.deactivateStudent(id);
+        return ResponseEntity.ok(MessageResponse.success("Student deactivated successfully"));
+    }
+
     @GetMapping("/count/skill-level/{skillLevel}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<Long> countBySkillLevel(@PathVariable SkillLevel skillLevel) {
