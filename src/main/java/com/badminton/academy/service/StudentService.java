@@ -294,7 +294,6 @@ public class StudentService {
         @CacheEvict(value = "students:feeHistory", key = "#id"),
         @CacheEvict(value = "batches:all", allEntries = true)
     })
-    @Transactional
     public void deleteStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
