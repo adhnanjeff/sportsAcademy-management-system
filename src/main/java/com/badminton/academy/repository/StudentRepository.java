@@ -34,6 +34,9 @@ public interface StudentRepository extends JpaRepository<Student, Long> {
     @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE b.id = :batchId")
     List<Student> findByBatchId(@Param("batchId") Long batchId);
     
+    @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE b.id = :batchId AND s.isActive = true")
+    List<Student> findActiveByBatchId(@Param("batchId") Long batchId);
+    
     @Query("SELECT DISTINCT s FROM Student s LEFT JOIN FETCH s.batches b LEFT JOIN FETCH s.parent LEFT JOIN FETCH s.daysOfWeek WHERE b.coach.id = :coachId")
     List<Student> findByCoachId(@Param("coachId") Long coachId);
     

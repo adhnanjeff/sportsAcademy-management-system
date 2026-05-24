@@ -92,6 +92,13 @@ public class StudentService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "students:activeByBatch", key = "#batchId")
+    public List<StudentResponse> getActiveStudentsByBatch(Long batchId) {
+        log.debug("Cache miss: fetching active students by batch {} from database", batchId);
+        return mapStudentsWithAggregatedStats(studentRepository.findActiveByBatchId(batchId));
+    }
+
+    @Transactional(readOnly = true)
     @Cacheable(value = "students:byCoach", key = "#coachId")
     public List<StudentResponse> getStudentsByCoach(Long coachId) {
         log.debug("Cache miss: fetching students by coach {} from database", coachId);
@@ -105,6 +112,7 @@ public class StudentService {
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
         @CacheEvict(value = "students:byParent", allEntries = true),
         @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "students:byCoach", allEntries = true),
         @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
     })
@@ -167,6 +175,7 @@ public class StudentService {
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
         @CacheEvict(value = "students:byParent", allEntries = true),
         @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "students:byCoach", allEntries = true),
         @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
     })
@@ -221,6 +230,7 @@ public class StudentService {
         @CacheEvict(value = "students:active", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#studentId"),
         @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "batches:all", allEntries = true),
         @CacheEvict(value = "batches:byId", key = "#batchId")
     })
@@ -257,6 +267,7 @@ public class StudentService {
         @CacheEvict(value = "students:active", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#studentId"),
         @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "batches:all", allEntries = true),
         @CacheEvict(value = "batches:byId", key = "#batchId")
     })
@@ -283,6 +294,8 @@ public class StudentService {
         @CacheEvict(value = "students:active", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#id"),
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
     })
     public void deactivateStudent(Long id) {
@@ -299,6 +312,8 @@ public class StudentService {
         @CacheEvict(value = "students:active", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#id"),
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "students:countBySkillLevel", allEntries = true)
     })
     public void activateStudent(Long id) {
@@ -317,6 +332,7 @@ public class StudentService {
         @CacheEvict(value = "students:bySkillLevel", allEntries = true),
         @CacheEvict(value = "students:byParent", allEntries = true),
         @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true),
         @CacheEvict(value = "students:byCoach", allEntries = true),
         @CacheEvict(value = "students:countBySkillLevel", allEntries = true),
         @CacheEvict(value = "students:feeHistory", key = "#id"),

@@ -65,6 +65,12 @@ public class StudentController {
         return ResponseEntity.ok(studentService.getStudentsByBatch(batchId));
     }
 
+    @GetMapping("/batch/{batchId}/active")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<StudentResponse>> getActiveStudentsByBatch(@PathVariable Long batchId) {
+        return ResponseEntity.ok(studentService.getActiveStudentsByBatch(batchId));
+    }
+
     @GetMapping("/coach/{coachId}")
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH') or @securityService.isCurrentUser(#coachId)")
     public ResponseEntity<List<StudentResponse>> getStudentsByCoach(@PathVariable Long coachId) {
