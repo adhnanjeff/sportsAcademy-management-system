@@ -3,6 +3,7 @@ package com.badminton.academy.repository;
 import com.badminton.academy.model.Batch;
 import com.badminton.academy.model.enums.SkillLevel;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -37,4 +38,8 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     
     @Query("SELECT b FROM Batch b WHERE b.skillLevel = :skillLevel AND b.isActive = true")
     List<Batch> findAvailableBatchesBySkillLevel(@Param("skillLevel") SkillLevel skillLevel);
+    
+    @Modifying
+    @Query(value = "DELETE FROM batch_students WHERE student_id = :studentId", nativeQuery = true)
+    void removeStudentFromAllBatches(@Param("studentId") Long studentId);
 }

@@ -294,16 +294,14 @@ public class StudentService {
         @CacheEvict(value = "students:feeHistory", key = "#id"),
         @CacheEvict(value = "batches:all", allEntries = true)
     })
+    @Transactional
     public void deleteStudent(Long id) {
         Student student = studentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + id));
 
-        // Remove student from batch join table associations first.
-        // This avoids FK failures in environments with strict relational constraints.
-        for (Batch batch : batchRepository.findByStudentId(id)) {
-            batch.getStudents().removeIf(batchStudent -> id.equals(batchStudent.getId()));
-            batchRepository.save(batch);
-        }
+        // Delete from batch_students join table first using native query
+        // This is the most reliable way to handle the many-to-many relationship
+        batchRepository.removeStudentFromAllBatches(id);
 
         // Explicitly delete dependent student records before deleting the student.
         // This provides predictable behavior even when DB-level cascade differs by environment.
@@ -314,6 +312,7 @@ public class StudentService {
         feePaymentHistoryRepository.deleteByStudentId(id);
 
         studentRepository.delete(student);
+        
         log.info("Student deleted: {} {}", student.getFirstName(), student.getLastName());
     }
 
