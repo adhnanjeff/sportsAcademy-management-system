@@ -74,15 +74,17 @@ public class DatabaseConfig {
                 }
             }
             
-            // Build JDBC URL with proper SSL settings for Render PostgreSQL
+            // Build JDBC URL with proper SSL settings for Render/Supabase PostgreSQL
             StringBuilder jdbcUrl = new StringBuilder();
             jdbcUrl.append("jdbc:postgresql://").append(host).append(":").append(port).append("/").append(database);
             jdbcUrl.append("?sslmode=require");
+            // CRITICAL: Disable prepared statement caching to fix "prepared statement already exists" error with Supabase pooler
+            jdbcUrl.append("&prepareThreshold=0");
             
-            // Append any additional query parameters (but skip sslmode if already present)
+            // Append any additional query parameters (but skip sslmode/prepareThreshold if already present)
             if (queryParams != null && !queryParams.isEmpty()) {
                 for (String param : queryParams.split("&")) {
-                    if (!param.startsWith("sslmode=") && !param.startsWith("dbname=")) {
+                    if (!param.startsWith("sslmode=") && !param.startsWith("dbname=") && !param.startsWith("prepareThreshold=")) {
                         jdbcUrl.append("&").append(param);
                     }
                 }
@@ -108,6 +110,10 @@ public class DatabaseConfig {
             if (!jdbcUrl.contains("sslmode=")) {
                 jdbcUrl += (jdbcUrl.contains("?") ? "&" : "?") + "sslmode=require";
             }
+            // Add prepareThreshold=0 to fix Supabase pooler issues
+            if (!jdbcUrl.contains("prepareThreshold=")) {
+                jdbcUrl += "&prepareThreshold=0";
+            }
             
             config.setJdbcUrl(jdbcUrl);
             log.info("Using JDBC URL: {}", jdbcUrl.substring(0, Math.min(50, jdbcUrl.length())) + "...");
@@ -123,9 +129,11 @@ public class DatabaseConfig {
         config.setValidationTimeout(5000);
         config.setLeakDetectionThreshold(60000);
         
-        // Additional properties for Render PostgreSQL compatibility
+        // Additional properties for Render/Supabase PostgreSQL compatibility
         config.addDataSourceProperty("reWriteBatchedInserts", "true");
         config.addDataSourceProperty("ApplicationName", "badminton-academy");
+        // Disable prepared statement caching to fix pooler issues
+        config.addDataSourceProperty("prepareThreshold", "0");
         
         return new HikariDataSource(config);
     }

@@ -16,10 +16,12 @@ spring:
       leak-detection-threshold: 60000
       validation-timeout: 5000
       connection-test-query: SELECT 1
+      data-source-properties:
+        prepareThreshold: 0
 
   jpa:
     hibernate:
-      ddl-auto: update # TEMPORARY - revert to validate once stable
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
