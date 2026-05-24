@@ -40,6 +40,7 @@ public class CacheConfig {
             "students:bySkillLevel",
             "students:byParent",
             "students:byBatch",
+            "students:activeByBatch",
             "students:byCoach",
             "students:countBySkillLevel",
             "students:feeHistory",
