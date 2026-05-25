@@ -124,10 +124,13 @@ public class StudentService {
             }
         }
 
+        String reqLastName = (request.getLastName() != null && !request.getLastName().isBlank()) ? request.getLastName().trim() : null;
+        String computedFullName = reqLastName != null ? request.getFirstName().trim() + " " + reqLastName : request.getFirstName().trim();
+
         Student student = Student.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .fullName(request.getFirstName() + " " + request.getLastName())
+                .firstName(request.getFirstName().trim())
+                .lastName(reqLastName)
+                .fullName(computedFullName)
                 .gender(request.getGender())
                 .dateOfBirth(request.getDateOfBirth())
                 .nationalIdNumber(request.getNationalIdNumber())
@@ -154,13 +157,11 @@ public class StudentService {
 
         Student savedStudent = studentRepository.save(student);
 
-        // Assign to batch if provided
+        // Assign to batch if provided - use native INSERT to avoid collection state issues
         if (request.getBatchId() != null) {
             Batch batch = batchRepository.findById(request.getBatchId())
                     .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + request.getBatchId()));
-            batch.getStudents().add(savedStudent);
-            batchRepository.save(batch);
-            savedStudent = studentRepository.findById(savedStudent.getId()).orElse(savedStudent);
+            batchRepository.addStudentToBatch(batch.getId(), savedStudent.getId());
         }
 
         log.info("Student created successfully: {} {}", savedStudent.getFirstName(), savedStudent.getLastName());
@@ -191,11 +192,16 @@ public class StudentService {
             student.setNationalIdNumber(request.getNationalIdNumber());
         }
 
-        if (request.getFirstName() != null) student.setFirstName(request.getFirstName());
-        if (request.getLastName() != null) student.setLastName(request.getLastName());
+        if (request.getFirstName() != null) student.setFirstName(request.getFirstName().trim());
+        if (request.getLastName() != null) {
+            student.setLastName(request.getLastName().isBlank() ? null : request.getLastName().trim());
+        }
         if (request.getGender() != null) student.setGender(request.getGender());
         if (request.getFirstName() != null || request.getLastName() != null) {
-            student.setFullName(student.getFirstName() + " " + student.getLastName());
+            String updatedLn = student.getLastName();
+            student.setFullName(updatedLn != null && !updatedLn.isBlank()
+                    ? student.getFirstName() + " " + updatedLn
+                    : student.getFirstName());
         }
         if (request.getDateOfBirth() != null) student.setDateOfBirth(request.getDateOfBirth());
         if (request.getPhoneNumber() != null) student.setPhoneNumber(request.getPhoneNumber().trim());
@@ -241,24 +247,11 @@ public class StudentService {
         Batch batch = batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
 
-        // Check if student is already in this batch to prevent duplicate key violation
-        boolean alreadyInBatch = batch.getStudents().stream()
-                .anyMatch(s -> s.getId().equals(studentId));
-        
-        if (alreadyInBatch) {
-            log.info("Student {} is already assigned to batch {}, skipping", studentId, batchId);
-            return mapToStudentResponse(student);
-        }
+        // Use native INSERT with ON CONFLICT DO NOTHING to safely handle duplicates
+        batchRepository.addStudentToBatch(batch.getId(), student.getId());
 
-        // Add bidirectional relationship
-        student.getBatches().add(batch);
-        batch.getStudents().add(student);
-
-        batchRepository.save(batch);
-        Student updatedStudent = studentRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
         log.info("Student {} assigned to batch {}", studentId, batchId);
-        return mapToStudentResponse(updatedStudent);
+        return mapToStudentResponse(student);
     }
 
     @Transactional
@@ -275,17 +268,15 @@ public class StudentService {
         Student student = studentRepository.findById(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
 
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
+        if (!batchRepository.existsById(batchId)) {
+            throw new ResourceNotFoundException("Batch not found with id: " + batchId);
+        }
 
-        student.getBatches().remove(batch);
-        batch.getStudents().remove(student);
+        // Use native DELETE to safely remove relationship
+        batchRepository.removeStudentFromBatch(batchId, studentId);
 
-        batchRepository.save(batch);
-        Student updatedStudent = studentRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
         log.info("Student {} removed from batch {}", studentId, batchId);
-        return mapToStudentResponse(updatedStudent);
+        return mapToStudentResponse(student);
     }
 
     @Transactional

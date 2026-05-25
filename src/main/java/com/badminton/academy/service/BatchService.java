@@ -169,20 +169,21 @@ public class BatchService {
         @CacheEvict(value = "batches:withSlots", allEntries = true),
         @CacheEvict(value = "students:all", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#studentId"),
-        @CacheEvict(value = "students:byBatch", allEntries = true)
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true)
     })
     public BatchResponse addStudentToBatch(Long batchId, Long studentId) {
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
+        if (!batchRepository.existsById(batchId)) {
+            throw new ResourceNotFoundException("Batch not found with id: " + batchId);
+        }
+        if (!studentRepository.existsById(studentId)) {
+            throw new ResourceNotFoundException("Student not found with id: " + studentId);
+        }
 
-        Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
-
-        batch.getStudents().add(student);
-        student.getBatches().add(batch);
-
-        Batch updatedBatch = batchRepository.save(batch);
+        // Use native INSERT with ON CONFLICT DO NOTHING to safely handle duplicates
+        batchRepository.addStudentToBatch(batchId, studentId);
         log.info("Student {} added to batch {}", studentId, batchId);
+        Batch updatedBatch = batchRepository.findById(batchId).orElseThrow();
         return mapToBatchResponse(updatedBatch);
     }
 
@@ -194,20 +195,21 @@ public class BatchService {
         @CacheEvict(value = "batches:withSlots", allEntries = true),
         @CacheEvict(value = "students:all", allEntries = true),
         @CacheEvict(value = "students:byId", key = "#studentId"),
-        @CacheEvict(value = "students:byBatch", allEntries = true)
+        @CacheEvict(value = "students:byBatch", allEntries = true),
+        @CacheEvict(value = "students:activeByBatch", allEntries = true)
     })
     public BatchResponse removeStudentFromBatch(Long batchId, Long studentId) {
-        Batch batch = batchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
+        if (!batchRepository.existsById(batchId)) {
+            throw new ResourceNotFoundException("Batch not found with id: " + batchId);
+        }
+        if (!studentRepository.existsById(studentId)) {
+            throw new ResourceNotFoundException("Student not found with id: " + studentId);
+        }
 
-        Student student = studentRepository.findById(studentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
-
-        batch.getStudents().remove(student);
-        student.getBatches().remove(batch);
-
-        Batch updatedBatch = batchRepository.save(batch);
+        // Use native DELETE for clean removal
+        batchRepository.removeStudentFromBatch(batchId, studentId);
         log.info("Student {} removed from batch {}", studentId, batchId);
+        Batch updatedBatch = batchRepository.findById(batchId).orElseThrow();
         return mapToBatchResponse(updatedBatch);
     }
 

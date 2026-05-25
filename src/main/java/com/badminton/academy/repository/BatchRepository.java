@@ -42,4 +42,12 @@ public interface BatchRepository extends JpaRepository<Batch, Long> {
     @Modifying
     @Query(value = "DELETE FROM batch_students WHERE student_id = :studentId", nativeQuery = true)
     void removeStudentFromAllBatches(@Param("studentId") Long studentId);
+
+    @Modifying
+    @Query(value = "INSERT INTO batch_students (batch_id, student_id) VALUES (:batchId, :studentId) ON CONFLICT DO NOTHING", nativeQuery = true)
+    void addStudentToBatch(@Param("batchId") Long batchId, @Param("studentId") Long studentId);
+
+    @Modifying
+    @Query(value = "DELETE FROM batch_students WHERE batch_id = :batchId AND student_id = :studentId", nativeQuery = true)
+    void removeStudentFromBatch(@Param("batchId") Long batchId, @Param("studentId") Long studentId);
 }

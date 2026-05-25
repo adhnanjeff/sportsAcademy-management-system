@@ -76,12 +76,22 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<MessageResponse> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
-        String message = ex.getMostSpecificCause() != null
+        String rootMessage = ex.getMostSpecificCause() != null
                 ? ex.getMostSpecificCause().getMessage()
                 : ex.getMessage();
-        log.error("Database constraint violation: {}", message);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(MessageResponse.error("Database constraint violation: " + message));
+        log.error("Database constraint violation: {}", rootMessage);
+
+        // Return user-friendly messages for common constraint violations
+        String userMessage = "A database conflict occurred. Please try again.";
+        if (rootMessage != null) {
+            if (rootMessage.contains("batch_students")) {
+                userMessage = "This student is already assigned to the selected batch.";
+            } else if (rootMessage.contains("national_id_number") || rootMessage.contains("unique")) {
+                userMessage = "A record with this information already exists.";
+            }
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(MessageResponse.error(userMessage));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
