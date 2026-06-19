@@ -1,6 +1,7 @@
 package com.badminton.academy.service;
 
 import com.badminton.academy.dto.request.CreateStudentRequest;
+import com.badminton.academy.dto.request.UpdateFeeStatusRequest;
 import com.badminton.academy.dto.request.UpdateStudentRequest;
 import com.badminton.academy.dto.response.FeePaymentHistoryResponse;
 import com.badminton.academy.dto.response.StudentResponse;
@@ -23,12 +24,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.Period;
+import java.time.format.TextStyle;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -631,5 +636,74 @@ public class StudentService {
                 .feePayable(history.getFeePayable())
                 .paidDate(history.getPaidDate())
                 .build();
+    }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:feeHistory", key = "#studentId"),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true)
+    })
+    public List<FeePaymentHistoryResponse> updateFeeStatusForRange(Long studentId, UpdateFeeStatusRequest request) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
+
+        int fromYear = request.getFromYear();
+        int fromMonth = request.getFromMonth();
+        int toYear = request.getToYear();
+        int toMonth = request.getToMonth();
+
+        if (fromYear > toYear || (fromYear == toYear && fromMonth > toMonth)) {
+            throw new com.badminton.academy.exception.BadRequestException("From date must be before or equal to To date");
+        }
+
+        List<FeePaymentHistory> updatedRecords = new ArrayList<>();
+
+        int year = fromYear;
+        int month = fromMonth;
+        while (year < toYear || (year == toYear && month <= toMonth)) {
+            String monthName = Month.of(month).getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+            FeePaymentHistory record = feePaymentHistoryRepository
+                    .findByStudentIdAndYearAndMonth(studentId, year, month)
+                    .orElse(FeePaymentHistory.builder()
+                            .student(student)
+                            .year(year)
+                            .month(month)
+                            .monthName(monthName)
+                            .feePayable(student.getFeePayable())
+                            .build());
+
+            record.setStatus(request.getStatus());
+            if (request.getAmountPaid() != null) {
+                record.setAmountPaid(request.getAmountPaid());
+            } else if (request.getStatus() == MonthlyFeeStatus.FULL) {
+                record.setAmountPaid(student.getFeePayable());
+            } else if (request.getStatus() == MonthlyFeeStatus.HALF) {
+                record.setAmountPaid(student.getFeePayable().divide(BigDecimal.valueOf(2)));
+            } else {
+                record.setAmountPaid(BigDecimal.ZERO);
+            }
+            record.setPaidDate(request.getStatus() != MonthlyFeeStatus.UNPAID ? LocalDate.now() : null);
+
+            updatedRecords.add(feePaymentHistoryRepository.save(record));
+
+            month++;
+            if (month > 12) {
+                month = 1;
+                year++;
+            }
+        }
+
+        // Update the student's current monthlyFeeStatus to match the latest month updated
+        student.setMonthlyFeeStatus(request.getStatus());
+        studentRepository.save(student);
+
+        log.info("Fee status updated for student {} from {}/{} to {}/{}: {}",
+                studentId, fromMonth, fromYear, toMonth, toYear, request.getStatus());
+
+        return updatedRecords.stream()
+                .map(this::mapToFeePaymentHistoryResponse)
+                .collect(Collectors.toList());
     }
 }

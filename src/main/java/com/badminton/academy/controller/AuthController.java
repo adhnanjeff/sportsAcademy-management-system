@@ -1,5 +1,6 @@
 package com.badminton.academy.controller;
 
+import com.badminton.academy.annotation.RateLimit;
 import com.badminton.academy.dto.request.LoginRequest;
 import com.badminton.academy.dto.request.OtpRequestDto;
 import com.badminton.academy.dto.request.OtpVerifyDto;
@@ -40,12 +41,14 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/signup/otp/request")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
     public ResponseEntity<OtpResponse> requestSignupOtp(@Valid @RequestBody SignupOtpRequest request) {
         OtpResponse response = authService.requestSignupOtp(request);
         if (response.isSuccess()) {
@@ -55,6 +58,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @RateLimit(maxRequests = 5, windowSeconds = 60)
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok(response);
@@ -71,6 +75,7 @@ public class AuthController {
      * POST /api/auth/otp/request
      */
     @PostMapping("/otp/request")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
     public ResponseEntity<OtpResponse> requestOtp(@Valid @RequestBody OtpRequestDto request) {
         OtpResponse response = otpService.requestOtp(request);
         if (response.isSuccess()) {
@@ -84,6 +89,7 @@ public class AuthController {
      * POST /api/auth/otp/verify
      */
     @PostMapping("/otp/verify")
+    @RateLimit(maxRequests = 5, windowSeconds = 60)
     public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody OtpVerifyDto request) {
         AuthResponse response = otpService.verifyOtp(request);
         return ResponseEntity.ok(response);
@@ -115,6 +121,7 @@ public class AuthController {
     }
 
     @PostMapping("/password/otp/request")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
     public ResponseEntity<OtpResponse> requestPasswordOtp(@Valid @RequestBody PasswordOtpRequest request) {
         OtpResponse response = authService.requestPasswordResetOtp(request);
         if (response.isSuccess()) {
@@ -124,12 +131,14 @@ public class AuthController {
     }
 
     @PostMapping("/password/otp/verify")
+    @RateLimit(maxRequests = 5, windowSeconds = 60)
     public ResponseEntity<MessageResponse> verifyPasswordOtp(@Valid @RequestBody PasswordOtpVerifyRequest request) {
         authService.verifyPasswordResetOtp(request);
         return ResponseEntity.ok(MessageResponse.success("OTP verified successfully"));
     }
 
     @PostMapping("/password/reset")
+    @RateLimit(maxRequests = 3, windowSeconds = 60)
     public ResponseEntity<MessageResponse> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
         authService.resetPasswordWithOtp(request);
         return ResponseEntity.ok(MessageResponse.success("Password reset successfully"));

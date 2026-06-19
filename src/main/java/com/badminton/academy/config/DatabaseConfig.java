@@ -105,7 +105,7 @@ public class DatabaseConfig {
             } else if (jdbcUrl.startsWith("postgresql://")) {
                 jdbcUrl = jdbcUrl.replace("postgresql://", "jdbc:postgresql://");
             }
-            
+
             // Add SSL if not present
             if (!jdbcUrl.contains("sslmode=")) {
                 jdbcUrl += (jdbcUrl.contains("?") ? "&" : "?") + "sslmode=require";
@@ -114,8 +114,18 @@ public class DatabaseConfig {
             if (!jdbcUrl.contains("prepareThreshold=")) {
                 jdbcUrl += "&prepareThreshold=0";
             }
-            
+
             config.setJdbcUrl(jdbcUrl);
+
+            String envUsername = System.getenv("DATABASE_USERNAME");
+            String envPassword = System.getenv("DATABASE_PASSWORD");
+            if (envUsername != null && !envUsername.isEmpty()) {
+                config.setUsername(envUsername);
+            }
+            if (envPassword != null && !envPassword.isEmpty()) {
+                config.setPassword(envPassword);
+            }
+
             log.info("Using JDBC URL: {}", jdbcUrl.substring(0, Math.min(50, jdbcUrl.length())) + "...");
         }
         

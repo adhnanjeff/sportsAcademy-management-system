@@ -4,6 +4,7 @@ import com.badminton.academy.security.CustomUserDetailsService;
 import com.badminton.academy.security.jwt.JwtAuthenticationEntryPoint;
 import com.badminton.academy.security.jwt.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -29,6 +30,9 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Value("${spring.profiles.active:prod}")
+    private String activeProfile;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -51,50 +55,54 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        boolean isDev = "dev".equalsIgnoreCase(activeProfile) || "local".equalsIgnoreCase(activeProfile);
+
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> {}) // Use CorsFilter bean from CorsConfig
-            .exceptionHandling(exception -> 
+            .cors(cors -> {})
+            .exceptionHandling(exception ->
                 exception.authenticationEntryPoint(jwtAuthenticationEntryPoint)
             )
-            .sessionManagement(session -> 
+            .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            .headers(headers -> headers.frameOptions(frame -> frame.disable())) // Allow H2 console
-            .authorizeHttpRequests(auth -> auth
-                // Public endpoints
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/public/**").permitAll()
-                
-                // Health check endpoints (for UptimeRobot/monitoring)
-                .requestMatchers("/api/health", "/api/ping").permitAll()
-                
-                // Swagger/OpenAPI endpoints
-                .requestMatchers(
-                    "/v3/api-docs/**",
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/api-docs/**"
-                ).permitAll()
-                
-                // H2 Console (for development)
-                .requestMatchers("/h2-console/**").permitAll()
-                
-                // Admin endpoints
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                
-                // Coach endpoints
-                .requestMatchers("/api/coach/**").hasAnyRole("ADMIN", "COACH")
-                
-                // Student endpoints
-                .requestMatchers("/api/student/**").hasAnyRole("ADMIN", "COACH", "STUDENT", "PARENT")
-                
-                // Parent endpoints
-                .requestMatchers("/api/parent/**").hasAnyRole("ADMIN", "PARENT")
-                
-                // All other requests must be authenticated
-                .anyRequest().authenticated()
-            );
+            .headers(headers -> {
+                if (isDev) {
+                    headers.frameOptions(frame -> frame.disable());
+                } else {
+                    headers.frameOptions(frame -> frame.deny());
+                }
+                headers.contentSecurityPolicy(csp ->
+                    csp.policyDirectives("default-src 'self'; frame-ancestors 'none'")
+                );
+                headers.httpStrictTransportSecurity(hsts ->
+                    hsts.includeSubDomains(true).maxAgeInSeconds(31536000)
+                );
+            })
+            .authorizeHttpRequests(auth -> {
+                auth
+                    .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/api/public/**").permitAll()
+                    .requestMatchers("/api/health", "/api/ping").permitAll();
+
+                if (isDev) {
+                    auth
+                        .requestMatchers(
+                            "/v3/api-docs/**",
+                            "/swagger-ui/**",
+                            "/swagger-ui.html",
+                            "/api-docs/**"
+                        ).permitAll()
+                        .requestMatchers("/h2-console/**").permitAll();
+                }
+
+                auth
+                    .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                    .requestMatchers("/api/coach/**").hasAnyRole("ADMIN", "COACH")
+                    .requestMatchers("/api/student/**").hasAnyRole("ADMIN", "COACH", "STUDENT", "PARENT")
+                    .requestMatchers("/api/parent/**").hasAnyRole("ADMIN", "PARENT")
+                    .anyRequest().authenticated();
+            });
 
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

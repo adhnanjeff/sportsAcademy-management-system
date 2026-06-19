@@ -274,8 +274,8 @@ public class AuthService {
             throw new IllegalArgumentException("Password is required");
         }
 
-        if (rawPassword.length() < 6) {
-            throw new IllegalArgumentException("Password must be at least 6 characters");
+        if (rawPassword.length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters");
         }
         return rawPassword;
     }

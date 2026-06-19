@@ -1,6 +1,7 @@
 package com.badminton.academy.controller;
 
 import com.badminton.academy.dto.request.CreateStudentRequest;
+import com.badminton.academy.dto.request.UpdateFeeStatusRequest;
 import com.badminton.academy.dto.request.UpdateStudentRequest;
 import com.badminton.academy.dto.response.FeePaymentHistoryResponse;
 import com.badminton.academy.dto.response.MessageResponse;
@@ -128,5 +129,13 @@ public class StudentController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<List<FeePaymentHistoryResponse>> getFeePaymentHistory(@PathVariable Long id) {
         return ResponseEntity.ok(studentService.getFeePaymentHistory(id));
+    }
+
+    @PutMapping("/{id}/fee-status")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<FeePaymentHistoryResponse>> updateFeeStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateFeeStatusRequest request) {
+        return ResponseEntity.ok(studentService.updateFeeStatusForRange(id, request));
     }
 }
