@@ -3,6 +3,7 @@ package com.badminton.academy.controller;
 import com.badminton.academy.dto.request.CreateBatchRequest;
 import com.badminton.academy.dto.request.UpdateBatchRequest;
 import com.badminton.academy.dto.response.BatchResponse;
+import com.badminton.academy.dto.response.LeaderboardEntryResponse;
 import com.badminton.academy.dto.response.MessageResponse;
 import com.badminton.academy.model.User;
 import com.badminton.academy.model.enums.Role;
@@ -129,5 +130,11 @@ public class BatchController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
     public ResponseEntity<Long> countStudentsInBatch(@PathVariable Long batchId) {
         return ResponseEntity.ok(batchService.countStudentsInBatch(batchId));
+    }
+
+    @GetMapping("/{batchId}/leaderboard")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<List<LeaderboardEntryResponse>> getBatchLeaderboard(@PathVariable Long batchId) {
+        return ResponseEntity.ok(batchService.getBatchLeaderboard(batchId));
     }
 }
