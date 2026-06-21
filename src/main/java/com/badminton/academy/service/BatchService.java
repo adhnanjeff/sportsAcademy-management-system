@@ -7,14 +7,12 @@ import com.badminton.academy.dto.response.LeaderboardEntryResponse;
 import com.badminton.academy.exception.ResourceNotFoundException;
 import com.badminton.academy.model.Batch;
 import com.badminton.academy.model.Coach;
-import com.badminton.academy.model.Match;
 import com.badminton.academy.model.Student;
 import com.badminton.academy.model.enums.AttendanceStatus;
 import com.badminton.academy.model.enums.SkillLevel;
 import com.badminton.academy.repository.AttendanceRepository;
 import com.badminton.academy.repository.BatchRepository;
 import com.badminton.academy.repository.CoachRepository;
-import com.badminton.academy.repository.MatchRepository;
 import com.badminton.academy.repository.StudentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,7 +36,6 @@ public class BatchService {
     private final BatchRepository batchRepository;
     private final CoachRepository coachRepository;
     private final StudentRepository studentRepository;
-    private final MatchRepository matchRepository;
     private final AttendanceRepository attendanceRepository;
 
     @Transactional(readOnly = true)
@@ -292,7 +289,7 @@ public class BatchService {
 
     @Transactional(readOnly = true)
     public List<LeaderboardEntryResponse> getBatchLeaderboard(Long batchId) {
-        Batch batch = batchRepository.findById(batchId)
+        batchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Batch not found with id: " + batchId));
 
         List<Student> students = studentRepository.findActiveByBatchId(batchId);
@@ -301,29 +298,21 @@ public class BatchService {
         for (Student student : students) {
             Long studentId = student.getId();
 
-            List<Match> matches = matchRepository.findByStudentId(studentId);
-            int matchWins = 0;
-            for (Match m : matches) {
-                if (m.getWinner() != null && m.getWinner().getId().equals(studentId)) matchWins++;
-            }
-            int matchTotal = matches.size();
-            int winRate = matchTotal > 0 ? Math.round((matchWins * 100f) / matchTotal) : 0;
-
             Long presentCount = attendanceRepository.countByStudentAndStatus(studentId, AttendanceStatus.PRESENT);
             Long absentCount = attendanceRepository.countByStudentAndStatus(studentId, AttendanceStatus.ABSENT);
             Long lateCount = attendanceRepository.countByStudentAndStatus(studentId, AttendanceStatus.LATE);
             long totalAtt = (presentCount != null ? presentCount : 0) + (absentCount != null ? absentCount : 0) + (lateCount != null ? lateCount : 0);
             double attendancePct = totalAtt > 0 ? ((presentCount != null ? presentCount : 0) * 100.0) / totalAtt : 0;
 
-            double composite = (winRate * 0.4) + (attendancePct * 0.3) + (winRate * 0.3);
+            double composite = attendancePct;
 
             entries.add(LeaderboardEntryResponse.builder()
                     .studentId(studentId)
                     .studentName(student.getFullName())
                     .photoUrl(student.getPhotoUrl())
-                    .matchWins(matchWins)
-                    .matchTotal(matchTotal)
-                    .winRate(winRate)
+                    .matchWins(0)
+                    .matchTotal(0)
+                    .winRate(0)
                     .assessmentAvg(0.0)
                     .attendancePercentage(Math.round(attendancePct * 10.0) / 10.0)
                     .compositeScore(Math.round(composite * 10.0) / 10.0)
