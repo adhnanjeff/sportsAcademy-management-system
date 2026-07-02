@@ -138,4 +138,22 @@ public class StudentController {
             @Valid @RequestBody UpdateFeeStatusRequest request) {
         return ResponseEntity.ok(studentService.updateFeeStatusForRange(id, request));
     }
+
+    @PutMapping("/{studentId}/fee-history/{feeId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<FeePaymentHistoryResponse> updateFeeRecord(
+            @PathVariable Long studentId,
+            @PathVariable Long feeId,
+            @Valid @RequestBody UpdateFeeStatusRequest request) {
+        return ResponseEntity.ok(studentService.updateSingleFeeRecord(studentId, feeId, request));
+    }
+
+    @DeleteMapping("/{studentId}/fee-history/{feeId}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COACH')")
+    public ResponseEntity<MessageResponse> deleteFeeRecord(
+            @PathVariable Long studentId,
+            @PathVariable Long feeId) {
+        studentService.deleteSingleFeeRecord(studentId, feeId);
+        return ResponseEntity.ok(MessageResponse.success("Fee record deleted successfully"));
+    }
 }

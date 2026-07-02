@@ -706,4 +706,58 @@ public class StudentService {
                 .map(this::mapToFeePaymentHistoryResponse)
                 .collect(Collectors.toList());
     }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:feeHistory", key = "#studentId"),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true)
+    })
+    public FeePaymentHistoryResponse updateSingleFeeRecord(Long studentId, Long feeId, UpdateFeeStatusRequest request) {
+        Student student = studentRepository.findById(studentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found with id: " + studentId));
+
+        FeePaymentHistory record = feePaymentHistoryRepository.findById(feeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeId));
+
+        if (!record.getStudent().getId().equals(studentId)) {
+            throw new com.badminton.academy.exception.BadRequestException("Fee record does not belong to this student");
+        }
+
+        record.setStatus(request.getStatus());
+        if (request.getAmountPaid() != null) {
+            record.setAmountPaid(request.getAmountPaid());
+        } else if (request.getStatus() == MonthlyFeeStatus.FULL) {
+            record.setAmountPaid(student.getFeePayable());
+        } else if (request.getStatus() == MonthlyFeeStatus.HALF) {
+            record.setAmountPaid(student.getFeePayable().divide(BigDecimal.valueOf(2)));
+        } else {
+            record.setAmountPaid(BigDecimal.ZERO);
+        }
+        record.setPaidDate(request.getStatus() != MonthlyFeeStatus.UNPAID ? LocalDate.now() : null);
+
+        FeePaymentHistory saved = feePaymentHistoryRepository.save(record);
+        log.info("Fee record {} updated for student {}: {}", feeId, studentId, request.getStatus());
+        return mapToFeePaymentHistoryResponse(saved);
+    }
+
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "students:feeHistory", key = "#studentId"),
+        @CacheEvict(value = "students:byId", key = "#studentId"),
+        @CacheEvict(value = "students:all", allEntries = true),
+        @CacheEvict(value = "students:active", allEntries = true)
+    })
+    public void deleteSingleFeeRecord(Long studentId, Long feeId) {
+        FeePaymentHistory record = feePaymentHistoryRepository.findById(feeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Fee record not found with id: " + feeId));
+
+        if (!record.getStudent().getId().equals(studentId)) {
+            throw new com.badminton.academy.exception.BadRequestException("Fee record does not belong to this student");
+        }
+
+        feePaymentHistoryRepository.delete(record);
+        log.info("Fee record {} deleted for student {}", feeId, studentId);
+    }
 }
